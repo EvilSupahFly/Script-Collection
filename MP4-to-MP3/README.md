@@ -4,6 +4,7 @@ To use this script:
   * download mp4-to-mp3.sh from here
   * make the script executable
   * open a terminal in a folder with MP4 or M4A files and type:
+
     `./mp4-to-mp3.sh ./`
 
 If errors are encountered, it will leave a message about the problem file and move on to the next (if available).
