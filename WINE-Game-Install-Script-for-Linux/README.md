@@ -12,9 +12,9 @@ The script is bound by some limitations at this point, and while it does offer e
 For launching, there are several options:
 
     1. ./install.sh
-    2. ./install skip
-    3. ./install "Some Folder"
-    4. ./install "Some Folder" skip
+    2. ./install.sh skip
+    3. ./install.sh "Some Folder"
+    4. ./install.sh "Some Folder" skip
 
 In the first instance, the script will read in a list of all the directories present under the one it's being run from. Useful if you can't remember where you saved the installer .EXE or if you just don't feel like typing more than the minimum required to make this work.
 
