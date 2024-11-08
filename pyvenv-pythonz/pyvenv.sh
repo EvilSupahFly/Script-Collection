@@ -19,8 +19,13 @@ WHITE="\033[1;37m" #White
 
 # Function to check and create a Python virtual environment using pythonz
 pyvenv() {
+    # If "list" is provided, ignore all other parameters and list the contents of "$HOME/python-virtual-environs/"
+    if [ "$1" = "list" ]; then
+        ls -Fla "$HOME/python-virtual-environs/"
+        return 0
+    fi
     # If no parameters are given, we prompt for both
-    # If only one is given, it will be assumed to be NAME
+    # If only one is given, and it isn't "list", it will be assumed to be NAME
     # If both are given, first will be assumed to be NAME, second will be VERSION
     local v_name=${1:-$(read -p "Enter the virtual environment name: " name && echo $name)}
     local v_home="$HOME/python-virtual-environs/$v_name"
@@ -50,12 +55,13 @@ pyvenv() {
 
     # If $v_home doesn't exist, assume we're making a new VENV and prompt for Python version
     if [ ! -d "$v_home" ]; then
+        echo -e "${RED}The VENV \"$v_home\" doesn't exist. ${WHITE}Creating it now.\n"
         py_ver=${2:-$(read -p "Enter the Python version: " version && echo $version)}
         usepy="$(pythonz locate $py_ver)"
         no_py="ERROR: \`CPython-$py_ver\` is not installed."
         # Check to see if the requested version is installed
         if [[ -z "$usepy" || "$usepy" = "$no_py" ]]; then
-            echo -e "\n${WHITE}Installing now.\n"
+            echo -e "\n${RED}Python version '${WHITE}$py_ver${RED}' is not installed.\n${WHITE}Installing now.\n"
             pythonz install "$py_ver"
             usepy="$(pythonz locate $py_ver)"
         fi
@@ -74,6 +80,5 @@ pyvenv() {
 
     # Activate VENV
     source "$v_home/bin/activate"
-    echo -e "\nType 'deactivate' to exit this venv when you're done."
-    echo -e "${RESET} \n"
+    echo -e "Type 'deactivate' to exit this venv when you're done.${RESET}\n"
 }
