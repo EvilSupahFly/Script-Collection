@@ -33,20 +33,3 @@ At this point, the script looks for any .EXE files in the source directory (eith
 Next, we install the newest release of Vulkan from [JC141's Vulkan repository](https://github.com/jc141x/vulkan) to replace DX11, and once the initial "setup" completes in WINE, the script looks for any .EXE files in the "destination" folder, once again presenting a user-selectable list.
 
 With the final .EXE selected, this script writes a runner script for the chosen game which defines the WINEPREFIX and game install location, and the name of the game's primary .EXE, makes it executable, and reports all this to the user.
-
-Screenshots:
-
-![Screenshot_01](https://github.com/user-attachments/assets/50c0c39f-7840-4ea8-aa3e-c59c8ed60746)
-
-![Screenshot_02](https://github.com/user-attachments/assets/8d9a6c7e-640e-48dd-a44c-9f8f4345ad49)
-
-![Screenshot_03](https://github.com/user-attachments/assets/ad2bb588-dcd1-4132-b5f2-f130240f53eb)
-
-![Screenshot_04](https://github.com/user-attachments/assets/34cea0b0-d985-43f1-83e5-2b3e9d4d975b)
-
-![Screenshot_05](https://github.com/user-attachments/assets/43c1eb69-e946-44ce-a43f-d6e1d0fc42f4)
-
-![Screenshot_06](https://github.com/user-attachments/assets/9ae1af66-8519-41a4-8945-f71e39dc0606)
-
-![Screenshot_07](https://github.com/user-attachments/assets/7ba00531-037f-4eb0-8b07-b59cd38bdcc2)
-
