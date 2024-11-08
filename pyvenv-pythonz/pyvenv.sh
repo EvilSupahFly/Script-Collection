@@ -1,16 +1,7 @@
 #!/bin/bash
 
-check_src() {
-    # Check to see if the whole script is being sourced or running stand alone because this part shouldn't be included if sourced
-    if [[ "$(ps -o ppid= -p $$)" -eq 1 ]]; then
-        pyvenv $1 $2
-    fi
-}
-
-check_src $1 $2
-
 # Want automatic integreation? Copy everything below this line into either /etc/bash.bashrc or $HOME/.bashrc and restart your terminal!
-# Moving these colour-code variables outside this function makes them available to the whole script, not just this function
+# Moving these colour-code variables outside this function makes them available to the whole script, not just this function - useful if you're using BASH sources above.
 RESET="\033[0m" #Normal
 RED="\033[1;31m" #Red
 GREEN="\033[1;32m" #Green
@@ -82,3 +73,12 @@ pyvenv() {
     source "$v_home/bin/activate"
     echo -e "Type 'deactivate' to exit this venv when you're done.${RESET}\n"
 }
+
+check_src() {
+    # Check to see if the whole script is being sourced or running stand alone because this part shouldn't be included if sourced
+    if [[ "$(ps -o ppid= -p $$)" -eq 1 ]]; then
+        pyvenv $1 $2
+    fi
+}
+
+check_src $1 $2
