@@ -1,5 +1,5 @@
 ## BASH-based Installer Script For WINE - Preamble
-This Windows game installer was written in BASH and is designed (originally) to be run on Ubuntu and downstream Ubuntu-based systems (like Mint, for example). At this point, it will fail if this is not the case, though changing that is on my eventual to-do list. This installer assumes you have also downloaded the `.redist` folder and have saved your installer .EXE files in a correspondingly-named subfolder of the folder the script is being run from (see the screenshots for examples).
+This Windows game installer was written in BASH and is designed (originally) to be run on Ubuntu and downstream Ubuntu-based systems (like Mint, for example). At this point, it will fail if this is not the case, though changing that is on my to-do list. This installer assumes you have also downloaded the `.redist` folder and have saved your installer .EXE files in a correspondingly-named subfolder of the folder the script is being run from.
 
 ## Terms Definitions:
  - "script" - the actual BASH script that does all your heavy lifting
