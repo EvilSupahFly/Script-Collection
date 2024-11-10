@@ -22,12 +22,12 @@ fftrim() {
     ffmpeg -ss "$1" -to "$2" -i "$3" -c copy "$4"
 }
 
-ffps4() {
-    #OG="OG_$1"; mv -v "$1" "$OG";
-    echo -e "${WHITE}$1 will be converted to ${1%.*}_PS4.mkv with no subtitles, AAC formatted audio, and x264 video.${RESET}"
-    ffmpeg -i "$1" -c:v libx264 -profile:v high -level:v 4.2 -c:a aac -map 0:s? -sn "${1%.*}_PS4.mp4"
-    #ffmpeg -i "$OG" -map 0:v -c:v copy -map 0:a:m:language:eng -c:a aac -map 0:s? -sn "${1%.*}.mp4"
-}
+#ffps4() {
+#    #OG="OG_$1"; mv -v "$1" "$OG";
+#    echo -e "${WHITE}$1 will be converted to ${1%.*}_PS4.mkv with no subtitles, AAC formatted audio, and x264 video.${RESET}"
+#    ffmpeg -i "$1" -c:v libx264 -profile:v high -level:v 4.2 -c:a aac -map 0:s? -sn "${1%.*}_PS4.mp4"
+#    #ffmpeg -i "$OG" -map 0:v -c:v copy -map 0:a:m:language:eng -c:a aac -map 0:s? -sn "${1%.*}.mp4"
+#}
 
 ffmerge() {
     echo -e "${WHITE}Generating list of all $1 files, and concatenating to \""output.$1\"".${RESET}"
