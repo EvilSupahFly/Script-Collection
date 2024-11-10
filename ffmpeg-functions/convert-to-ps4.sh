@@ -1,92 +1,112 @@
-function check_and_install() {
-    local program=$1
-    if ! command -v "$program" &> /dev/null; then
-        echo "$program is not installed. Installing..."
-        case "$(uname -s)" in
-            Linux)
-                if [ -f /etc/debian_version ]; then
-                    sudo apt-get install "$program"
-                elif [ -f /etc/redhat-release ]; then
-                    sudo yum install "$program"
-                elif [ -f /etc/arch-release ]; then
-                    sudo pacman -S "$program"
-                else
-                    echo "Unsupported distribution."
-                fi
-                ;;
-            Darwin)
-                brew install "$program"
-                ;;
-            *)
-                echo "Unsupported OS."
-                return 1
-                ;;
-        esac
-    fi
-}
-
 function convert_media() {
-    if [ "$#" -lt 1 ]; then
-        echo "Error: At least one file must be specified."
-        return 1
-    fi
-
-    TEMPLATE="$HOME/.var/conversions/PS4TEMPLATE.TXT"
     FILE1="$1"
     FILE2="$2"
-
-    if [ -z "$FILE2" ]; then
-        if [ ! -f "$TEMPLATE" ]; then
-            echo "Error: $TEMPLATE does not exist. Please re-run and specify two files."
-            return 1
-        fi
-        FILE2="$FILE1"
-    fi
-
-    for file in "$FILE1" "$FILE2"; do
-        if [ ! -f "$file" ]; then
-            echo "Error: File $file does not exist."
-            return 1
-        fi
-    done
-
-    if [ ! -f "$TEMPLATE" ]; then
-        ffmpeg -i "$FILE1" -f ffmetadata "$TEMPLATE"
-    else
-        read -p "Update $TEMPLATE with codecs from $FILE1? (y/n): " update
-        if [[ "$update" == "y" ]]; then
-            rm "$TEMPLATE"
-            ffmpeg -i "$FILE1" -f ffmetadata "$TEMPLATE"
-        fi
-    fi
-
-    # In the case of different file extensions, use $FILE1's extension for the conversion
-    # This avoids having to check to be sure that the container format of $FILE2 actually
-    # supports the codecs used by $FILE1
+    TEMPLATE="$HOME/.var/conversions/PS4TEMPLATE.TXT"
     PS4="${FILE2%.*}-PS4.${FILE1##*.}"
-        
-    # Comprehensive distribution check for FFMPEG and VLC
-    check_and_install ffmpeg
-    check_and_install vlc
+    CHKTMPLT=FALSE
 
-    if ! ffmpeg -i "$FILE2" -c copy -map_metadata 0 "$PS4"; then
-        echo "FFMPEG conversion failed."
-        return 1
+    function validate_files() {
+        if [[ $# -lt 1 || $# -gt 2 ]]; then
+            echo "Error: Please provide either one or two files."
+            exit 1
+        fi
+
+        FILE1="$1"
+        FILE2="$2"
+
+        if [[ ! -e "$FILE1" ]]; then
+            echo "Error: $FILE1 doesn't exist."
+            exit 1
+        fi
+        if [[ ! -e "$FILE2" ]]; then
+            echo "Error: $FILE2 doesn't exist."
+            exit 1
+        fi
+    }
+
+    # Normally functions are defined outside the main loop but these are only used by this function so it's fine to make them sub-functions.
+    function chkTemplate() {
+        if [[ -e "$TEMPLATE" && $(stat -c%s "$TEMPLATE") -gt 10 ]]; then
+            CHKTMPLT=TRUE
+        else
+            CHKTMPLT=FALSE
+        fi
+    }
+
+    function chkApp() {
+        local app="$1"
+        local managers=("apt" "dnf" "pacman" "brew" "zypper" "yum" "apk" "snap" "port" "choco")
+        if ! command -v "$app" &> /dev/null; then
+            echo -e "$app is not installed. Attempting to install...\n"
+            for manager in "${managers[@]}"; do
+                if command -v "$manager" &> /dev/null; then
+                    case "$manager" in
+                        apt|dnf|pacman|zypper|yum|apk|snap)
+                            sudo "$manager" install ffmpeg vlc
+                            return
+                            ;;
+                        brew)
+                            brew install ffmpeg vlc
+                            return
+                            ;;
+                        port)
+                            sudo port install ffmpeg vlc
+                            return
+                            ;;
+                        choco)
+                            choco install ffmpeg vlc
+                            return
+                            ;;
+                    esac
+                fi
+            done
+            echo "Error: No supported package manager found."
+            return 1
+        fi
+    }
+
+    # Execute validation and checks
+    validate_files "$@"
+    chkApp ffmpeg
+    chkTemplate
+
+    # Handle file conversion based on CHKTMPLT
+    if [[ $# -eq 1 && $CHKTMPLT == TRUE ]]; then
+        FILE2="$FILE1"
+    elif [[ $# -eq 1 && $CHKTMPLT == FALSE ]]; then
+        echo "Error: Template file is missing or invalid."
+        exit 1
+    elif [[ $# -eq 2 && $CHKTMPLT == TRUE ]]; then
+        codec_data=$(<"$TEMPLATE")
+        ffmpeg -i "$FILE2" -c:v "$codec_data" "$PS4" || { echo "FFMPEG conversion failed."; exit 1; }
+    elif [[ $# -eq 2 && $CHKTMPLT == FALSE ]]; then
+        ffmpeg -i "$FILE1" -f ffmetadata "$TEMPLATE"
+        ffmpeg -i "$FILE2" -c:v copy -c:a copy "$PS4" || { echo "FFMPEG conversion failed."; exit 1; }
     fi
 
-    if [ ! -f "$PS4" ]; then
-        echo "Error: Conversion failed, $PS4 does not exist."
-        return 1
+    # Verify conversion success
+    if [[ ! -e "$PS4" ]]; then
+        echo "Error: The output file $PS4 was not created."
+        exit 1
     fi
 
-    read -p "Play $PS4 in VLC? (y/n): " play
-    if [[ "$play" == "y" ]]; then
-        vlc "$PS4"
-        # The option to delete is not recommended but provided for situations where free space is a concern.
-        read -p "Delete $FILE2 after playback? (y/n): " delete
-        if [[ "$delete" == "y" ]]; then
-            rm "$FILE2"
+    # Prompt to play the converted file
+    read -p "Would you like to play $PS4 in VLC? (y/n) " play_choice
+    if [[ $play_choice == "y" ]]; then
+        chkApp vlc
+        vlc "$PS4" &
+    fi
+
+    # Prompt for deletion of FILE2
+    read -p "Do you want to delete $FILE2? (y/n) " delete_choice
+    if [[ $delete_choice == "y" ]]; then
+        read -p "Are you absolutely sure? (y/n) " confirm_delete
+        if [[ $confirm_delete == "y" ]]; then
+            read -p "Final confirmation to delete $FILE2? (y/n) " final_confirm
+            if [[ $final_confirm == "y" ]]; then
+                rm "$FILE2"
+                echo "$FILE2 has been successfully deleted."
+            fi
         fi
     fi
-
 }
