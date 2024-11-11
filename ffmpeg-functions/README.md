@@ -27,11 +27,11 @@ If the conversion is successful, you have the option of verifying in VLC and if 
 
 This script checks for both FFMPEG and VLC, and will attempt to install what's missing using some fairly thorough "What Distro Is This?" logic which theoretically supports most versions of Linux, and even MacOS, though I haven't tested it to be sure.
 
-Function 'makePS4' takes two filenames are arguments and copies the codec metadata of SOURCE, which should be 'known good' on the PS4, and saves it to a template which it uses to convert TARGET using FFMPEG to match, ideally making a 'known-good-on-PS4' copy of TARGET.
+The function `makePS4` takes two filenames as arguments and copies the codec metadata of SOURCE, which should be 'known good' on the PS4, and saves it to a template which it uses to convert TARGET using FFMPEG to match, ideally making a 'known-good-on-PS4' copy of TARGET.
 ```
      makePS4 "SOURCE" "TARGET"
 ```
-Alternatively, if you've run 'makePS4' before, and you already have a working template, specifiying only one file will use the existing" template to convert TARGET to match the format of the file the template was originally built against.
+Alternatively, if you've run `makePS4` before, and you already have a working template, specifiying only one file will use the existing template to convert TARGET to match the format of the file the template was originally built against.
 ```
      makePS4 "TARGET"
 ```
@@ -40,7 +40,7 @@ Usage Example using realistic paths and filenames:
 ```
 makePS4 "/home/evilsupahfly/Movies/Attack Of The Killer Tomatoes (1978)/Attack Of The Killer Tomatoes - 1978 1080p [H264-mp4].mp4"
 ```
-   --[ or ]--
+   --]<  or  >[--
 ```
 makePS4 "/home/evilsupahfly/Movies/Avatar (2009)/Avatar.2009.EXTENDED.720p.BluRay.H264.AAC-RARBG.mp4" "/home/evilsupahfly/Movies/Batteries Not Included (1987)/Batteries Not Included (1987).mkv"
 ```
