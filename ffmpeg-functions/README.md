@@ -40,7 +40,7 @@ Usage Example using realistic paths and filenames:
 ```
 makePS4 "/home/evilsupahfly/Movies/Attack Of The Killer Tomatoes (1978)/Attack Of The Killer Tomatoes - 1978 1080p [H264-mp4].mp4"
 ```
-   --]<  or  >[--
+`   --]<  or  >[--   `
 ```
 makePS4 "/home/evilsupahfly/Movies/Avatar (2009)/Avatar.2009.EXTENDED.720p.BluRay.H264.AAC-RARBG.mp4" "/home/evilsupahfly/Movies/Batteries Not Included (1987)/Batteries Not Included (1987).mkv"
 ```
