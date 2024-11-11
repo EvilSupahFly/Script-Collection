@@ -3,8 +3,8 @@
 #
 #     makePS4 "SOURCE" "TARGET"
 #
-# Alternatively, if you've run 'makePS4' before, and you already have a working template, specifiying only one file will use the existing"
-# template to convert TARGET to match the format of the file the template was originally built against."
+# Alternatively, if you've run 'makePS4' before, and you already have a working template, specifiying only one file will use the existing
+# template to convert TARGET to match the format of the file the template was originally built against.
 #
 #     makePS4 "TARGET"
 #
