@@ -21,12 +21,21 @@ Why memorize a bunch of command-line options when you can just make a BASH funct
 ### [[convert-to-ps4.sh](https://github.com/EvilSupahFly/Script-Collection/blob/main/ffmpeg-functions/convert-to-ps4.sh)]:
 This is a WAAAAAAAAAY more elabourate script which takes a "known good on PS4" file, saves the codec format to a text file (if the file doesn't already exist), then uses it as a dictionary to convert a second file to the same format. Why? Because I got tired of trying to play stuff from my media server on my PlayStaion 4 only to have it complain that the media isn't supported. Initially, I was using the "convert to PS4" function in `shortcuts.sh` but that didn't always work, and I never understood why. So I came up with the idea of doing this instead.
 
+Note that for this to work properly when filenames or pathnames contain spaces (` `), you should enclose your filenames in double quotes.
+
 If the conversion is successful, you have the option of verifying in VLC and if you're happy with the results, you can delete the original - which I would **NOT** recommend unless storage space is a problem. **THIS SCRIPT MAKES NO ATTEMPT TO VERIFY YOUR STORAGE CAPACITY. IF THERE STORAGE SPACE IS INSUFFICIENT, FFMPEG WILL FAIL DURING THE CONVERSION, CAUSING THE SCRIPT TO EXIT AUTOMATICALLY. THIS SCRIPT DOES NOT RECORD THE ERROR NUMBER GIVEN IF SOMETHING FAILS SO YOU WILL NEED TO CHECK THE APP'S OWN MESSAGES IN THE TERMINAL WINDOW.**
 
 This script checks for both FFMPEG and VLC, and will attempt to install what's missing using some fairly thorough "What Distro Is This?" logic which theoretically supports most versions of Linux, and even MacOS, though I haven't tested it to be sure.
 
-This is essentially how this works when you run it:
-  - Check if template exists, and if so:
+Usage Example:
+```
+makePS4 "/home/evilsupahfly/Movies/Attack Of The Killer Tomatoes (1978)/Attack Of The Killer Tomatoes - 1978 1080p [H264-mp4].mp4"
+   --[ or ]--
+makePS4 "/home/evilsupahfly/Movies/Avatar (2009)/Avatar.2009.EXTENDED.720p.BluRay.H264.AAC-RARBG.mp4" "/home/evilsupahfly/Movies/Batteries Not Included (1987)/Batteries Not Included (1987).mkv"
+```
+
+Essentially, here's how this works when you run it:
+  - Checks if template exists, and if so:
     - If one file is given, use template
     - If two files are given ask to update or reuse template
   - If template doesn't exist
