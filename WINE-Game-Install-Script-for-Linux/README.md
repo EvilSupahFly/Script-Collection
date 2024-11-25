@@ -33,3 +33,10 @@ At this point, the script looks for any .EXE files in the source directory (eith
 Next, we install the newest release of Vulkan from [JC141's Vulkan repository](https://github.com/jc141x/vulkan) to replace DX11, and once the initial "setup" completes in WINE, the script looks for any .EXE files in the "destination" folder, once again presenting a user-selectable list.
 
 With the final .EXE selected, this script writes a runner script for the chosen game which defines the WINEPREFIX and game install location, and the name of the game's primary .EXE, makes it executable, and reports all this to the user.
+
+## The update.sh Update
+
+Now included is an update script - [`update.sh`](https://github.com/EvilSupahFly/Script-Collection/blob/main/WINE-Game-Install-Script-for-Linux/update.sh). Many games release patches and updates in the form of .EXE files. Provided these files are stored in the "Updates" folder - a subfolder residing in the same folder as the script - the update script will simply process all .EXE files in the folder, asking you to RUN, SKIP or EXIT for each entry in the array. You probably don't want to keep too many updates in here though.
+If you choose RUN, it will launch the patch file using WINE. Once completed, it will move to the next file and the loop starts over.
+If you choose SKIP, it will move to the next file without calling WINE and the loop starts over.
+If you EXIT, it quits the script with exit code 0 without running WINE or calling up the next list entry.
