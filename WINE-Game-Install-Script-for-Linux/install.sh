@@ -327,7 +327,7 @@ elif [ ${#GRAB_EXE[@]} -eq 0 ]; then
         [yY] ) echo;
             # If DO_GSS="y" we'll continue with the script, but use a place holder for the runner script since no .EXE was found
             echo -e "\n${WHITE}Continuing as per your request.\n";
-            EXE="\"Just A Place Holder - Replace Me With Actual Game .EXE\"";
+            EXE="\"Just A Place Holder - Replace Me With Game's Actual .EXE\"";;
         * ) echo;
             # If anything other than "y" was selected, treat it as a fatal error and abandon the install without creating the runner script
             echo -e "\n${RED}OK, I'm Stopping this process. You'll have to start over if you want to proceed.${RESET}\n";
