@@ -1,11 +1,11 @@
 # The function has been reworked. Now, by calling makePS4, you can convert a single file. No more template requirement.
 # I've also added batchPS4() for batch-mode processing, which can handle entire directory trees by running instances of makePS4()
 # as a background process. To prevent it from consuming too many system resources, it will default to running one process per CPU
-# core unless otherwise directed through use of the --MAX=## argument.
+# core unless otherwise directed through use of the --MAX=## argument, which is limited to 1.5x your 'nproc' core count.
 
 # Function to convert media files to PS4-compatible formats using FFMPEG
 makePS4() {
-    RESET="\033[0m"; RED="\033[1m\033[1;91m"; WHITE="\033[1m\033[1;97m"
+    RESET="\033[0m"; RED="\033[1m\033[1;91m"; WHITE="\033[1m\033[1;97m"; GREEN="\033[1m\033[1;92m"
 
     TARGET="$1"
 
@@ -66,33 +66,46 @@ makePS4() {
 
 # Function to batch convert media files to PS4-compatible formats using makePS4 function above
 batchPS4() {
+    RESET="\033[0m"; RED="\033[1m\033[1;91m"; WHITE="\033[1m\033[1;97m"; GREEN="\033[1m\033[1;92m"
+
     local basedir=""
     local max_jobs=""
+    local requested=""
     local running=0
     local total=0
     local passed=0
     local failed=0
 
-    GREEN="\033[1m\033[1;92m"; RESET="\033[0m"; RED="\033[1m\033[1;91m"; WHITE="\033[1m\033[1;97m"
-
+    # Argument parsing
     for arg in "$@"; do
         if [[ "$arg" =~ ^--MAX=([0-9]+)$ ]]; then
-            max_jobs="${BASH_REMATCH[1]}"
+            requested="${BASH_REMATCH[1]}"
         elif [[ -d "$arg" ]]; then
             basedir="$arg"
         fi
     done
 
-    [[ -z "$basedir" ]] && { echo -e "\033[1;91mError: must specify a directory.\033[0m"; return 1; }
+    [[ -z "$basedir" ]] && {
+        echo -e "\033[1;91mError: must specify a directory.\033[0m"
+        return 1
+    }
 
-    # Default to 1 job per core
-    if [[ -z "$max_jobs" ]]; then
-        max_jobs=$(nproc --all 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)
+    # Concurrency logic
+    cpu_count=$(nproc --all 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)
+    absolute_cap=$((cpu_count * 3 / 2))
+    if [[ -n "$requested" ]]; then
+        if (( requested > absolute_cap )); then
+            echo -e "\033[1;91mWarning: --MAX capped to $absolute_cap (1.5× $cpu_count cores).\033[0m"
+            max_jobs=$absolute_cap
+        else
+            max_jobs=$requested
+        fi
+    else
+        max_jobs=$cpu_count
     fi
 
     echo -e "\033[1;97mBatch mode: '$basedir' (max $max_jobs concurrent jobs)\033[0m"
 
-    tmpdir="$(mktemp -d)"
     declare -A job_pid
 
     find "$basedir" -type f \( -iname '*.mp4' -o -iname '*.mkv' -o -iname '*.mov' \) |
@@ -112,7 +125,7 @@ batchPS4() {
 
     wait
 
-    # Summary report
+    # Job status report
     for pid in "${!job_pid[@]}"; do
         logfile="${job_pid[$pid]}"
         if grep -q "Created:" "$logfile"; then
@@ -124,10 +137,9 @@ batchPS4() {
 
     echo -e "\033[1;97m$max_jobs jobs requested.\033[0m"
     if (( failed > 0 )); then
-        echo -e "\033[1;91m$failed jobs failed.\033[0m"
+        echo -e "\033[1;91m$failed jobs failed.${RESET}"
     else
-        echo -e "\033[1;92mAll conversions complete.\033[0m"
+        echo -e "\033[1;92mAll conversions complete.${RESET}"
     fi
-
     echo -e "\033[1;97mDetails: logs in '$basedir/ps4_*.log'\033[0m"
 }
