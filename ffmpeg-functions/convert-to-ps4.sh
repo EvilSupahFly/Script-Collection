@@ -86,7 +86,7 @@ batchPS4() {
     done
 
     [[ -z "$basedir" ]] && {
-        echo -e "\033[1;91mError: must specify a directory.\033[0m"
+        echo -e "${RED}Error: must specify a directory.${RESET}"
         return 1
     }
 
@@ -95,7 +95,7 @@ batchPS4() {
     absolute_cap=$((cpu_count * 3 / 2))
     if [[ -n "$requested" ]]; then
         if (( requested > absolute_cap )); then
-            echo -e "\033[1;91mWarning: --MAX capped to $absolute_cap (1.5× $cpu_count cores).\033[0m"
+            echo -e "${RED}Warning: --MAX capped to $absolute_cap (1.5× $cpu_count cores).${RESET}"
             max_jobs=$absolute_cap
         else
             max_jobs=$requested
@@ -104,11 +104,11 @@ batchPS4() {
         max_jobs=$cpu_count
     fi
 
-    echo -e "\033[1;97mBatch mode: '$basedir' (max $max_jobs concurrent jobs)\033[0m"
+    echo -e "${WHITE}Batch mode: '$basedir' (max $max_jobs concurrent jobs)${RESET}"
 
     declare -A job_pid
-
-    find "$basedir" -type f \( -iname '*.mp4' -o -iname '*.mkv' -o -iname '*.mov' \) |
+    # Supports .MP4, .MKV, .MOV, and .AVI for now. To add more, just add `-o -iname '*.(your_extension)' before ' \)' below.
+    find "$basedir" -type f \( -iname '*.mp4' -o -iname '*.mkv' -o -iname '*.mov' -o -iname '*.avi' \) |
     while IFS= read -r file; do
         ((total++))
         logfile="$basedir/ps4_$(basename "$file").log"
@@ -135,11 +135,11 @@ batchPS4() {
         fi
     done
 
-    echo -e "\033[1;97m$max_jobs jobs requested.\033[0m"
+    echo -e "${WHITE}$max_jobs jobs requested.${RESET}"
     if (( failed > 0 )); then
-        echo -e "\033[1;91m$failed jobs failed.${RESET}"
+        echo -e "${RED}$failed jobs failed.${RESET}"
     else
-        echo -e "\033[1;92mAll conversions complete.${RESET}"
+        echo -e "${GREEN}All conversions complete.${RESET}"
     fi
-    echo -e "\033[1;97mDetails: logs in '$basedir/ps4_*.log'\033[0m"
+    echo -e "${WHITE}Details: logs in '$basedir/ps4_*.log'${RESET}"
 }
