@@ -2,9 +2,21 @@
 # I've also added batchPS4() for batch-mode processing, which can handle entire directory trees by running instances of makePS4()
 # as a background process. To prevent it from consuming too many system resources, it will default to running one process per CPU
 # core unless otherwise directed through use of the --MAX=## argument, which is limited to 1.5x your 'nproc' core count.
-
+#
+# If you plan to add these functions to your '~/.bashrc', you can declare the colour codes outside these functions, then remove
+# the colour code definitions from inside the top of each function.
+#
+# Single file use:
+# > makePS4 "/path/to/some/file.mkv"
+#
+# Batch Mode processing:
+# > batchPS4 "/path/to/some/folder/Season 1"
+#    >> OR <<
+# > batchPS4 "/path/to/some/other/folder/Season 3" --MAX=16
+#
 # Function to convert media files to PS4-compatible formats using FFMPEG
 makePS4() {
+    # Colour Codes
     RESET="\033[0m"; RED="\033[1m\033[1;91m"; WHITE="\033[1m\033[1;97m"; GREEN="\033[1m\033[1;92m"
 
     TARGET="$1"
@@ -15,9 +27,11 @@ makePS4() {
     fi
 
     if [[ -d "$TARGET" ]]; then
-        echo -e "${RED}'$TARGET' is a directory.${RESET}"
-        echo -e "${WHITE}To convert an entire folder, use:${RESET}"
-        echo -e "${WHITE}  makePS4_batch \"$TARGET\" --MAX=#${RESET}"
+        echo -e "${RED}'$TARGET' is a directory."
+        echo -e "${WHITE}To convert an entire folder, use:"
+        echo -e "${YELLOW}  makePS4_batch \"$TARGET\" --MAX=#"
+        echo -e "${WHITE}  >> or <<"
+        echo -e "${YELLOW}  makePS4_batch \"$TARGET\" --MAX=#${RESET}"
         return 1
     fi
 
@@ -32,7 +46,7 @@ makePS4() {
     src_ext="mp4"
     codec_data="-c:v libx264 -profile:v high -level:v 4.0 -crf 20 -preset slow -c:a aac -b:a 192k"
 
-    # Skip if already compliant
+    # Skip if already compliant - 'vcodec' is for video, 'acodec' is for audio
     vcodec=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=nw=1:nk=1 "$TARGET")
     acodec=$(ffprobe -v error -select_streams a:0 -show_entries stream=codec_name -of default=nw=1:nk=1 "$TARGET")
     expected_v=$(echo "$codec_data" | awk '{print $2}')
@@ -43,7 +57,8 @@ makePS4() {
         return 0
     fi
 
-    # Subtitles
+    # Subtitles will only be kept if they use the 'mov_text' format.
+    # PS4 doesn't support anything else, outside of flattening the subtitles into each frame as part of the video.
     subswitch=""
     s_codec=$(ffprobe -v error -select_streams s -show_entries stream=codec_name -of default=nw=1:nk=1 "$TARGET")
     if [[ "$s_codec" == "mov_text" ]]; then
@@ -66,6 +81,7 @@ makePS4() {
 
 # Function to batch convert media files to PS4-compatible formats using makePS4 function above
 batchPS4() {
+    # Colour codes
     RESET="\033[0m"; RED="\033[1m\033[1;91m"; WHITE="\033[1m\033[1;97m"; GREEN="\033[1m\033[1;92m"
 
     local basedir=""
