@@ -14,10 +14,67 @@
 #    >> OR <<
 # > batchPS4 "/path/to/some/other/folder/Season 3" --MAX=16
 #
+# >>> 2, July 2025 Update:
+#  - Added sub-functions to check for and install FFMPEG (if absent), regardless of shell being used.
+#  - Added filename check to skip conversion if "-PS4" already exists, eiminating issue with reconversions
+#    when codec data differs due to FFMPEG conversion quality difference from earlier script versions.
+# <<<
+#
 # Function to convert media files to PS4-compatible formats using FFMPEG
 makePS4() {
     # Colour Codes
     RESET="\033[0m"; RED="\033[1m\033[1;91m"; WHITE="\033[1m\033[1;97m"; GREEN="\033[1m\033[1;92m"
+    check_ffmpeg() {
+        if ! command -v ffmpeg &> /dev/null; then
+            echo "FFMPEG is not installed. Attempting to install..."
+            install_ffmpeg
+        else
+            echo "FFMPEG is already installed."
+        fi
+    }
+
+    # Function to install FFMPEG using popular package managers
+    install_ffmpeg() {
+        # Use sudo if it's available, otherwise run as-is
+        SUDO=""
+        if command -v sudo >/dev/null 2>&1; then
+            SUDO="sudo"
+        fi
+
+        managers="apt dnf yum pacman zypper emerge xbps-install apk brew"
+        commands=(
+            "$SUDO apt update && $SUDO apt install -y ffmpeg"
+            "$SUDO dnf install -y ffmpeg"
+            "$SUDO yum install -y ffmpeg"
+            "$SUDO pacman -Sy --noconfirm ffmpeg"
+            "$SUDO zypper install -y ffmpeg"
+            "$SUDO emerge --ask=n media-video/ffmpeg"
+            "$SUDO xbps-install -y ffmpeg"
+            "$SUDO apk add --no-interactive ffmpeg"
+            "brew install ffmpeg"
+        )
+
+        # Special case: Homebrew on Linux (not macOS)
+        if [ "$(uname -s)" != "Darwin" ] && command -v brew >/dev/null 2>&1; then
+            echo "Homebrew detected on Linux."
+            brew install ffmpeg
+            return $?
+        fi
+
+        i=0
+        for manager in $managers; do
+            if command -v "$manager" >/dev/null 2>&1; then
+                echo "Using package manager: $manager"
+                eval "${commands[$i]}"
+                return $?
+            fi
+            i=$((i + 1))
+        done
+
+        echo "${RED}No supported package manager found. Please install FFMPEG manually.${RESET}"
+        return 1
+    }
+    check_ffmpeg
 
     TARGET="$1"
 
@@ -42,6 +99,14 @@ makePS4() {
 
     TARGET="$1"
     [[ -f "$TARGET" ]] || { echo -e "${RED}Target file not found: $TARGET${RESET}"; return 1; }
+
+    # Sanity check: skip if the filename already ends with "-PS4" before extension
+    basename_noext="${TARGET##*/}"
+    basename_noext="${basename_noext%.*}"
+    if [[ "$basename_noext" =~ -[Pp][Ss]4$ ]]; then
+        echo -e "${WHITE}Skipping '$TARGET' — filename already ends with '-PS4'.${RESET}"
+        return 0
+    fi
 
     src_ext="mp4"
     codec_data="-c:v libx264 -profile:v high -level:v 4.0 -crf 20 -preset slow -c:a aac -b:a 192k"
