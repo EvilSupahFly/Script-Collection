@@ -14,6 +14,8 @@
 #    >> OR <<
 # > batchPS4 "/path/to/some/other/folder/Season 3" --MAX=16
 #
+# 'batchPS4' will track and log every file it attempts, letting you know what failed and what succeeded.
+#
 # >>> 2, July 2025 Update:
 #  - Added sub-functions to check for and install FFMPEG (if absent), regardless of shell being used.
 #  - Added filename check to skip conversion if "-PS4" already exists, eiminating issue with reconversions
