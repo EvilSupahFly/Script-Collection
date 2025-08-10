@@ -1,18 +1,14 @@
 #!/usr/bin/env bash
 
 #set -eo pipefail
-#
+
 # This is nearing the final evolution of my Game Installer Script. Command-line parameters are now optional,
 # I've added colour to the output, the logic has been tweaked out a bit so now the script will check for WINE,
 # and attempt to install it, should it not be found, and I've also added commentary to each section to explain
 # what it all does and added extensive error handling. As far as features go, I was thinking of making both the
-# MSVC redist and Vulkan functions into something which could be called independently of actually performing an
-# install with a command-line parameter, but I don't really see the need at this point. $WINEPREFIX is optional
-# and can be provided on the commandline. If it doesn't exist, it will be created. Created a loop now, at the
-# end which asks for additional optional .exe files to take into account bundle installers - like Bioshock and
-# Dishonored - that can install multiple games in a series or franchise from a single installer. Now, the
-# launcher script can have an optional menu embedded which presents you with different target .exe files you
-# can potentially run in the prefix created (or updated) by this installer.
+# MSVC redist and Vulkan functions which could be called independently of actually performing an install with
+# a command-line parameter, but I don't really see the need at this point. $WINEPREFIX is optional and can be
+# provided on the commandline. If it doesn't exist, it will be created.
 
 # Function: showHelp
 # Purpose: Displays usage help and exits
@@ -89,7 +85,7 @@ install_vulkan() {
     # Install or update Vulkan. Ping GIT HUB to verify network connectivity, then get the latest version of VULKAN,
     # compare to what's installed (if any), and download and install the latest version if there's either none already
     # installed or the installed version is older than the current release. Downloads are deleted after install.
-    ping -c 1 github.com >/dev/null || { echo -e "${RED}Possibly no network. Booting might fail.${WHITE}" ; }
+    curl -s --head https://github.com | grep "200 OK" >/dev/null || { echo -e "${RED}Possibly no network. Booting might fail.${WHITE}" ; }
     VLKLOG="$WINEPREFIX/vulkan.log"; VULKAN="$PWD/vulkan"; VLKVER="$(curl -s -m 5 https://api.github.com/repos/jc141x/vulkan/releases/latest | awk -F '["/]' '/"browser_download_url":/ {print $11}' | cut -c 1-)"
     status-vulkan() {
         [[ ! -f "$VLKLOG" || -z "$(awk "/^${FUNCNAME[1]}\$/ {print \$1}" "$VLKLOG" 2>/dev/null)" ]] || { echo -e "${FUNCNAME[1]} present" && return 1; };
@@ -218,7 +214,7 @@ done
 
 if [[ ${#POSITIONAL[@]} -gt 1 ]]; then
     echo -e "${RED}Note: Multiple folders given: ${WHITE}${POSITIONAL[*]}"
-    echo -e "${RED}Only the last one (${WHITE}${GAMEDIR}${RED}) will be used.${RESET}"
+    echo -e "${RED}Only ${WHITE}${GAMEDIR}${RED} will be used.${RESET}"
 fi
 
 # restore positional parameters: $1 is now your game-folder (if any)
@@ -519,14 +515,10 @@ GAMEDIR=""
 cd "$GAMEDEST" || exit 1
 
 grab_exe_list "$GAMEDEST" GRAB_EXE EXE
-if [ $? -ne 0 ]; then
-    echo -e "\n${WHITE}\"${RED}$G_SRC${WHITE}\" doesn't contain any .exe files.\n\n${YELLOW} ლ(ಠ益ಠ)ლ ${WHITE}\n\n"
-    IFS= read -r -p "Continue anyway? You'll have to manually edit the launcher script. (y/n) " DO_GSS
-    case $DO_GSS in
-        [nN] ) echo -e "${RED}Stopping as requested.${RESET}"; exit 255;;
-        * ) SELECTED_EXES=("Just A Place Holder - Replace Me With Game's Actual .EXE");;
-    esac
-else
+# shellcheck disable=SC2181
+[ $? -ne 0 ] && exit 255
+EXE=$(basename "$EXE")
+if [ $? -eq 0 ]; then
     SELECTED_EXES=()
     while true; do
         echo -e "\n${WHITE}Game runner options:\n"
@@ -552,6 +544,13 @@ else
             echo -e "\n${YELLOW}$gamesel ${RED}wasn't a valid number.${WHITE}\n"
         fi
     done
+else
+    echo -e "\n${WHITE}\"${RED}$GAMEDEST${WHITE}\" doesn't contain any .exe files.\n\n${YELLOW} ლ(ಠ益ಠ)ლ ${WHITE}\n\n"
+    IFS= read -r -p "Continue anyway? You'll have to manually edit the launcher script. (y/n) " DO_GSS
+    case $DO_GSS in
+        [nN] ) echo -e "${RED}Stopping as requested.${RESET}"; exit 255;;
+        * ) SELECTED_EXES=("Just A Place Holder - Replace Me With Game's Actual .EXE");;
+    esac
 fi
 
 echo -e "\n${WHITE}Game Destination: \"${YELLOW}$GAMEDEST${WHITE}\" (\"C:\Games\\$ONE\")\n\nWriting Game Starter Script (GSS) for ${YELLOW}$ONE ${WHITE}to ${YELLOW}$GSS ${WHITE}...\n"
@@ -579,7 +578,8 @@ export GAMEDIR="$GAMEDIR"
 export DXVK_ENABLE_NVAPI=1
 
 # Check Vulkan version and download and install if there's a newer version available online
-ping -c 1 github.com >/dev/null || { echo -e "Possibly no network. This may mean that booting will fail." ; }; VLKLOG="\$WINEPREFIX/vulkan.log"; VULKAN="\$PWD/vulkan"
+
+curl -s --head https://github.com | grep "200 OK" >/dev/null || { echo -e "Possibly no network. This may mean that booting will fail." ; }; VLKLOG="\$WINEPREFIX/vulkan.log"; VULKAN="\$PWD/vulkan"
 VLKVER="\$(curl -s -m 5 https://api.github.com/repos/jc141x/vulkan/releases/latest | awk -F '["/]' '/"browser_download_url":/ {print \$11}' | cut -c 1-)"
 status-vulkan() { [[ ! -f "\$VLKLOG" || -z "\$(awk "/^\${FUNCNAME[1]}\$/ {print \$1}" "\$VLKLOG" 2>/dev/null)" ]] || { echo -e "\${FUNCNAME[1]} present" && return 1; }; }
 vulkan() { DL_URL="\$(curl -s https://api.github.com/repos/jc141x/vulkan/releases/latest | awk -F '["]' '/"browser_download_url":/ {print \$4}')"; VLK="\$(basename "\$DL_URL")"
@@ -590,6 +590,11 @@ vulkan-dl() { echo -e "Using external vulkan translation (dxvk,vkd3d,dxvk-nvapi)
 [[ -f "\$VLKLOG" && -n "\$VLKVER" && "\$VLKVER" != "\$(awk '{print \$1}' "\$VLKLOG")" ]] && { rm -f vulkan.tar.xz || true; } && vulkan-dl
 
 EOL
+## Start process in WINE
+#export DXVK_ENABLE_NVAPI=1
+#cd "\$GAMEDIR"
+#"\$WINE" \"$EXE\" "\$@"
+#EOL
 
 if [[ ${#SELECTED_EXES[@]} -eq 1 ]]; then
     EXE=$(basename "${SELECTED_EXES[0]}")
@@ -597,7 +602,8 @@ if [[ ${#SELECTED_EXES[@]} -eq 1 ]]; then
 
 # Start process in WINE
 cd "\$GAMEDIR"
-"\$WINE" "$EXE" "\$@"
+[[ -f "$EXE" ]] || { echo -e "Executable not found: $EXE"; exit 1; }
+"$WINE" "$EXE" "$@"
 EOL
 
 else
