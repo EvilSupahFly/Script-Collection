@@ -633,9 +633,7 @@ echo -e "\nIt probably won't cause any problems for non-nVidia GPUs, but it's be
 echo -e "\nThe full path of your ${YELLOW}$ONE ${WHITE}wineprefix is: \"${YELLOW}$WINEPREFIX${WHITE}\"\n"
 echo -e "\nBe sure to verify that the game executable(s) written to \"${YELLOW}$GSS${WHITE}\" as:${YELLOW}" 
 for i in "${!SELECTED_EXES[@]}"; do
-    dir=$(dirname "${SELECTED_EXES[$i]}")
-    exe=$(basename "${SELECTED_EXES[$i]}")
-    printf 'do_gameScope "%s" ;;\n' "$((i+1))" "$dir" "$exe"
+    echo -e "$((i+1)): $(basename "${SELECTED_EXES[$i]}")"
 done
 echo -e "${WHITE}and modify if necessary.${RESET}\n"
 
