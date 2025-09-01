@@ -664,6 +664,6 @@ for i in "${!SELECTED_EXES[@]}"; do
     #echo -e "    $((i+1)): ${SELECTED_EXES[$i]}"
     echo -e "    $((i+1)): ${GRAB_EXE[$i]}"
 done
-echo -e "${WHITE}and modify if necessary.${RESET}\n"
+echo -e "\n${WHITE}and modify if necessary.${RESET}\n"
 
 exit 0
