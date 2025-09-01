@@ -300,7 +300,7 @@ echo -e "${WHITE}\nThis script will attempt to install WINE for you if it isn't 
 echo -e "As such, it would be ${ULINE}${YELLOW}REALLY HELPFUL${RESET}${WHITE} if you have Internet access."
 echo -e "It's also largely failproof, so if it encounters something it can't fix, or something"
 echo -e "which can't be fixed later by tweaking the runner script, it will exit with a fatal"
-echo -e "error. Everything is mostly automated, only requiring you to answer a few prompts.\n"
+echo -e "error. Everything is mostly automated, only requiring you to answer a few prompts."
 # shellcheck disable=SC2162
 read -r -p $'\nTo continue, press '"${YELLOW}"'<ENTER>'"${WHITE}"'. To cancel, press '"${YELLOW}"'<CTRL-C>'"${WHITE}"'. ' donext
 
@@ -447,15 +447,15 @@ echo -e "    \$WINEPREFIX=\"$WINEPREFIX\""
 echo -e "    \$GAMEDEST=\"$GAMEDEST\""
 echo -e "    \$WINEDLLOVERRIDES=\"winemenubuilder.exe=d;mshtml=d;nvapi,nvapi64=y\""
 echo -e "    \$WINE_LARGE_ADDRESS_AWARE=1"
-echo -e "\n  I ${YELLOW}${ULINE}***STRONGLY***${RESET}${WHITE} recommend picking the folder \"${ULINE}${YELLOW}$GAMEDEST${RESET}${WHITE}\""
+echo -e "\n  I  ${YELLOW}${ULINE}***STRONGLY***${RESET}${WHITE}  recommend picking the folder \"${ULINE}${YELLOW}$GAMEDEST${RESET}${WHITE}\""
 echo -e "  when the installer launches. For the sake of automation, this installer script creates the directory using"
 echo -e "  the placeholder \"${YELLOW}\$GAMEDEST${WHITE}\", and that's where the launcher script will expect it to be."
-echo -e "\n  If the installer doesn't default to \"${YELLOW}C:\Games\\$1${WHITE}\" you can change it using the advanced options."
+echo -e "\n  If the installer doesn't default to \"${YELLOW}C:\Games\\${1}${WHITE}\" you can change it using the advanced options."
 echo -e "\n  Also, you don't need to install DirectX or the MSVC Redistributables from the installer menu."
 echo -e "  Vulkan replaces DirectX, and the MSVC Redistributables can be (re)installed any time by running this script again."
-echo -e "  This install scripthandles all that, as you have no doubt already noticed.\n"
+echo -e "  This install scripthandles all that, as you have no doubt already noticed."
 echo -e "\n  If you let the game's installer use a different folder, you will have to manually change the path and possibly the"
-echo -e "  filename for the game's primary ${YELLOW}.exe ${WHITE}in the ${YELLOW}$GSS ${WHITE}script to match.\n"
+echo -e "  filename for the game's primary ${YELLOW}.exe ${WHITE}in the ${YELLOW}$GSS ${WHITE}script to match."
 echo -e "\n  If you do modify the launcher script, remember that paths and files are ${RED}Case Sensitive${WHITE} on Linux."
 # shellcheck disable=SC2034
 read -r -p $'\nTo continue, press '"${YELLOW}"'<ENTER>'"${WHITE}"'. To cancel, press '"${YELLOW}"'<CTRL-C>'"${WHITE}"'. ' donext
