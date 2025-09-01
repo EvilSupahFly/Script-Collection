@@ -592,16 +592,18 @@ PRIMARY_DISPLAY=\$(xrandr --query | awk '/ primary/{print \$1; exit}')
 EOL
 
 if [[ ${#SELECTED_EXES[@]} -eq 1 ]]; then
-    EXE=$(basename "${SELECTED_EXES[0]}")
-    cat << EOL >> "${GSS}"
+    full_path="${SELECTED_EXES[0]}"
+    rel_path="${full_path#$GAMEDEST/}"
+    exe_dir="$(dirname "$rel_path")"
+    EXE="$(basename "$rel_path")"
 
+    cat << EOL >> "${GSS}"
 cd "\$GAMEDEST"
 [[ -f "$EXE" ]] || { echo -e "Executable not found: $EXE"; exit 1; }
 
 do_gameScope "$EXE" "$@"
 
 EOL
-
 else
     # Start the menu section
     cat << EOL >> "${GSS}"
