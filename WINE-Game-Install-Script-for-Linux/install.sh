@@ -16,7 +16,7 @@
 # launcher which prompts you to choose the .exe you want to run. The menu option text in the "echo" lines can
 # be changed later if you want to provide a proper title, so long as the GameScope wrapper is left alone. For
 # example, I've included my "Dishonored Collection" launcher menu as an example:
-# 
+#
 # echo "Select a game to launch:"
 # echo "1) Dishonored"
 # echo "2) Dishonored 2"
@@ -28,8 +28,6 @@
 #   3) cd "${GAMEDEST}/Dishonored - Death of the Outsider" && do_gameScope "Dishonored_DO.exe" ;;
 #   *) echo "Invalid selection." ;;
 # esac
-# 
-# 
 
 # Function: showHelp
 # Purpose: Displays usage help and exits
@@ -187,7 +185,6 @@ YELLOW=$'\e[1;33m'
 RED=$'\e[1;91m'
 GREEN=$'\e[1;92m'
 WHITE=$'\e[1;97m'
-# Normal
 RESET=$'\e[0m'
 
 # -----------------------------
@@ -241,6 +238,7 @@ cd "$(dirname "$(readlink -f "$0")")" || exit; [ "$EUID" = "0" ] && echo -e "${R
 # Check if a foler was supplied on the command line and deal with any trailing slashes, should they exist
 if [[ -z "$1" ]]; then
     # Load all subfolders into an array and make it a numbered list
+    #GDIRS=($(find . -maxdepth 1 -type d -exec basename {} \; | grep -vE '^\.$|^\..$|\.redist$'))
     GDIRS=()
     echo -e "\n${RED}Commandline was blank. ${WHITE}Listing potential game folders:\n"
     for dir in */; do
@@ -271,7 +269,7 @@ if [[ -z "$1" ]]; then
         fi
     done
 
-    LAUNCHER="${GDIRS[dirsel]%/}" # Remove trailing slash if present
+    LAUNCHER="${GDIRS[dirsel]%/}"
     echo -e "${YELLOW}Launching install script for \"${ULINE}${WHITE}$LAUNCHER${RESET}${YELLOW}\":"
     echo
     # By calling '. $0 "${GDIRS[dirsel]}"' we can relaunch this script using the chosen directory as the commandline
@@ -379,6 +377,7 @@ if [[ -n "$CUSTOM_PREFIX" ]]; then
     WINEPREFIX="$CUSTOM_PREFIX"
     echo -e "${GREEN}Using custom prefix ${WHITE}${WINEPREFIX}${RESET}"
 else
+    #WINEPREFIX="/home/$(whoami)/Game_Storage"
     WINEPREFIX="/home/$(whoami)/Games/$NOSPACE"
     echo -e "${GREEN}Using default prefix ${WHITE}${WINEPREFIX}${RESET}"
 fi
@@ -441,24 +440,23 @@ EXE=$(basename "$EXE")
 [ ! -d "$GAMEDEST" ] && mkdir -p "$GAMEDEST"
 
 # Print variables, their contents, and an explanatory note for verification.
-echo -e "\n${WHITE}Technical details, if you care:\n"
+echo -e "\n${WHITE}Technical details, if you care:"
 echo -e "\n${YELLOW}    \$GSS=\"$GSS\""
 echo -e "    \$G_SRC=\"$G_SRC\""
 echo -e "    \$WINEPREFIX=\"$WINEPREFIX\""
 echo -e "    \$GAMEDEST=\"$GAMEDEST\""
 echo -e "    \$WINEDLLOVERRIDES=\"winemenubuilder.exe=d;mshtml=d;nvapi,nvapi64=y\""
-echo -e "    \$WINE_LARGE_ADDRESS_AWARE=1\n"
-echo -e "\n        Installer=\"$EXE\"${WHITE}\n"
+echo -e "    \$WINE_LARGE_ADDRESS_AWARE=1"
 echo -e "\n  I ${YELLOW}${ULINE}***STRONGLY***${RESET}${WHITE} recommend picking the folder \"${ULINE}${YELLOW}$GAMEDEST${RESET}${WHITE}\""
 echo -e "  when the installer launches. For the sake of automation, this installer script creates the directory using"
-echo -e "  the placeholder \"${YELLOW}\$GAMEDEST${WHITE}\", and that's where the launcher script will expect it to be.\n"
-echo -e "\n  If the installer doesn't default to \"${YELLOW}C:\Games\\$1${WHITE}\" you can change it using the advanced options.\n"
+echo -e "  the placeholder \"${YELLOW}\$GAMEDEST${WHITE}\", and that's where the launcher script will expect it to be."
+echo -e "\n  If the installer doesn't default to \"${YELLOW}C:\Games\\$1${WHITE}\" you can change it using the advanced options."
 echo -e "\n  Also, you don't need to install DirectX or the MSVC Redistributables from the installer menu."
 echo -e "  Vulkan replaces DirectX, and the MSVC Redistributables can be (re)installed any time by running this script again."
 echo -e "  This install scripthandles all that, as you have no doubt already noticed.\n"
 echo -e "\n  If you let the game's installer use a different folder, you will have to manually change the path and possibly the"
 echo -e "  filename for the game's primary ${YELLOW}.exe ${WHITE}in the ${YELLOW}$GSS ${WHITE}script to match.\n"
-echo -e "\n  If you do modify the launcher script, remember that paths and files are ${RED}Case Sensitive${WHITE} on Linux.\n"
+echo -e "\n  If you do modify the launcher script, remember that paths and files are ${RED}Case Sensitive${WHITE} on Linux."
 # shellcheck disable=SC2034
 read -r -p $'\nTo continue, press '"${YELLOW}"'<ENTER>'"${WHITE}"'. To cancel, press '"${YELLOW}"'<CTRL-C>'"${WHITE}"'. ' donext
 
@@ -473,7 +471,7 @@ read -r -p $'\nTo continue, press '"${YELLOW}"'<ENTER>'"${WHITE}"'. To cancel, p
 export DXVK_ENABLE_NVAPI=1
 
 # Start WINE and pass the primary installer .EXE to it.
-echo -e "\n${WHITE}Starting \"${YELLOW}${ONE}${WHITE}\" installer...\n"
+echo -e "\n${WHITE}Starting \"${YELLOW}${ONE}${WHITE}\" installer..."
 # shellcheck disable=SC2164
 cd "$G_SRC" # This is the source folder for the .exe
 #Run WINE with an "If It Fails" assumption block.
@@ -489,12 +487,13 @@ EXE=""
 GRAB_EXE=""
 DO_GSS="y"
 SELECTED_EXES=()
-
+REL_EXES=()
 # This is the destination folder, originally set at the start: GAMEDEST="$WINEPREFIX/drive_c/Games/$ONE"
 cd "$GAMEDEST" || exit 1
 
 # Run grab_exe_list to populate GRAB_EXE and EXE
-if ! grab_exe_list "$GAMEDEST" GRAB_EXE EXE; then    echo -e "\n${WHITE}\"${RED}$GAMEDEST${WHITE}\" doesn't contain any .exe files.\n\n${YELLOW} ლ(ಠ益ಠ)ლ ${WHITE}\n\n"
+if ! grab_exe_list "$GAMEDEST" GRAB_EXE EXE; then
+    echo -e "\n${WHITE}\"${RED}$GAMEDEST${WHITE}\" doesn't contain any .exe files.\n\n${YELLOW} ლ(ಠ益ಠ)ლ ${WHITE}\n\n"
     IFS= read -r -p "Continue anyway? You'll have to manually edit the launcher script. (y/n) " DO_GSS
     case $DO_GSS in
         [nN] ) echo -e "${RED}Stopping as requested.${RESET}"; exit 255;;
@@ -604,6 +603,7 @@ cd "\$GAMEDEST/${exe_dir}"
 do_gameScope "$EXE" "$@"
 
 EOL
+
 else
     # Start the menu section
     cat << EOL >> "${GSS}"
@@ -663,7 +663,6 @@ fi
 chmod a+x "$GSS"
 echo -e "\n"
 cat "$GSS"
-echo -e "\n"
 read -r -p $'\nThis is '"${YELLOW}${GSS}${WHITE}"'. Please review and press '"${YELLOW}"'<ENTER>'"${WHITE}"' to continue.' donext
 echo -e "\n${WHITE}\"${YELLOW}$GSS${WHITE}\" has been written and made executable.\n\nIf you aren't running an nVidia GPU, you should change this:"
 echo -e "        ${YELLOW}export WINEDLLOVERRIDES=\"winemenubuilder.exe=d;mshtml=d;nvapi,nvapi64=n;dxgi=n\""
@@ -673,7 +672,7 @@ echo -e "It probably won't cause any problems for non-nVidia GPUs, but it's best
 echo -e "The full path of your ${YELLOW}$ONE ${WHITE}wineprefix is: \"${YELLOW}$WINEPREFIX${WHITE}\""
 echo -e "Be sure to verify that the game executable(s) written to \"${YELLOW}$GSS${WHITE}\" as:${YELLOW}\n"
 for i in "${!SELECTED_EXES[@]}"; do
-    echo -e "    $((i+1)): $(basename "${SELECTED_EXES[$i]}")"
+    echo -e "    $((i+1)): ${SELECTED_EXES[$i]}"
 done
 echo -e "${WHITE}and modify if necessary.${RESET}\n"
 
