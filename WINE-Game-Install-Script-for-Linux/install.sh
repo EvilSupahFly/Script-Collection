@@ -77,7 +77,8 @@ grab_exe_list() {
         IFS= read -r -p "Select an .exe file: " user_sel
         if [[ "$user_sel" =~ ^[0-9]+$ && "$user_sel" -lt "${#_result[@]}" ]]; then
             # shellcheck disable=SC2207
-            _chosen="$(basename "${_result[$user_sel]}")"
+            #_chosen="$(basename "${_result[$user_sel]}")"
+            _chosen="${_result[$user_sel]}"
             return 0
         else
             echo -e "\n${YELLOW}\"$user_sel\" ${RED}is not a valid choice.${WHITE}\n"
@@ -434,7 +435,7 @@ fi
 grab_exe_list "$G_SRC" GRAB_EXE EXE
 # shellcheck disable=SC2181
 [ $? -ne 0 ] && exit 255
-EXE=$(basename "$EXE")
+SETUPEXE=$(basename "$EXE")
 
 # If $GAMEDEST doesn't exist, create it
 [ ! -d "$GAMEDEST" ] && mkdir -p "$GAMEDEST"
@@ -475,25 +476,24 @@ echo -e "\n${WHITE}Starting \"${YELLOW}${ONE}${WHITE}\" installer..."
 # shellcheck disable=SC2164
 cd "$G_SRC" # This is the source folder for the .exe
 #Run WINE with an "If It Fails" assumption block.
-if ! "$WINE" "$EXE" "$@" >/dev/null 2>&1; then
+if ! "$WINE" "$SETUPEXE" "$@" >/dev/null 2>&1; then
     # If it did fail, save the error number and exit with a message.
     ERRNUM=$?
     echo -e "\n${RED}Error code ${YELLOW}$ERRNUM ${RED}detected on exit.\n${WHITE}Looks like something went wrong.\nUnfortunately, since ${RED}$ERRNUM${WHITE} is a Windows-related error, I can't help you.\n${RESET}"
     exit 255
 fi
 
-# We used this once already so we're blanking it so we can reuse it
+# We used these once already so we're blanking them so we can use them again
 EXE=""
 GRAB_EXE=""
 DO_GSS="y"
 SELECTED_EXES=()
-REL_EXES=()
-# This is the destination folder, originally set at the start: GAMEDEST="$WINEPREFIX/drive_c/Games/$ONE"
+
 cd "$GAMEDEST" || exit 1
 
 # Run grab_exe_list to populate GRAB_EXE and EXE
 if ! grab_exe_list "$GAMEDEST" GRAB_EXE EXE; then
-    echo -e "\n${WHITE}\"${RED}$GAMEDEST${WHITE}\" doesn't contain any .exe files.\n\n${YELLOW} ლ(ಠ益ಠ)ლ ${WHITE}\n\n"
+    echo -e "\n${WHITE}\"${RED}${GAMEDEST}${WHITE}\" doesn't contain any .exe files.\n\n${YELLOW} ლ(ಠ益ಠ)ლ ${WHITE}\n\n"
     IFS= read -r -p "Continue anyway? You'll have to manually edit the launcher script. (y/n) " DO_GSS
     case $DO_GSS in
         [nN] ) echo -e "${RED}Stopping as requested.${RESET}"; exit 255;;
@@ -534,7 +534,7 @@ while true; do
     fi
 done
 
-echo -e "\n${WHITE}Game Destination: \"${YELLOW}$GAMEDEST${WHITE}\" (\"C:\Games\\$ONE\")\n\nWriting Game Starter Script (GSS) for ${YELLOW}$ONE ${WHITE}to ${YELLOW}$GSS ${WHITE}...\n"
+echo -e "\n${WHITE}Game Destination is \"${YELLOW}${GAMEDEST}${WHITE}\" in Linux (or \"${YELLOW}C:\Games\\${ONE}${WHITE}\" in Windows).\n\nWriting Game Starter Script (GSS) for ${YELLOW}${ONE}${WHITE} to ${YELLOW}${GSS} ${WHITE}...\n"
 
 # Create game starter script by writing everything up to "EOL" in the file defined in $GSS
 cat << EOL > "${GSS}"
@@ -595,7 +595,9 @@ if [[ ${#SELECTED_EXES[@]} -eq 1 ]]; then
     rel_path="${full_path#$GAMEDEST/}"
     exe_dir="$(dirname "$rel_path")"
     EXE="$(basename "$rel_path")"
-
+    if [[ "$exe_dir" == "." ]]; then
+        exe_dir=""
+    fi
     cat << EOL >> "${GSS}"
 cd "\$GAMEDEST/${exe_dir}"
 [[ -f "$EXE" ]] || { echo -e "Executable not found: $EXE"; exit 1; }
@@ -607,19 +609,6 @@ EOL
 else
     # Start the menu section
     cat << EOL >> "${GSS}"
-
-# Menu entries relative to \$GAMEDEST
-REL_EXES=(
-EOL
-
-    # Write each relative path into the REL_EXES array
-    for p in "${SELECTED_EXES[@]}"; do
-        rel="${p#$GAMEDEST/}"
-        printf '  "%s"\n' "$rel" >> "$GSS"
-    done
-
-    cat << 'EOL' >> "${GSS}"
-)
 
 # --- Auto-generated game menu ---
 # You can edit the "echo" labels below to make them friendlier,
@@ -672,7 +661,8 @@ echo -e "It probably won't cause any problems for non-nVidia GPUs, but it's best
 echo -e "The full path of your ${YELLOW}$ONE ${WHITE}wineprefix is: \"${YELLOW}$WINEPREFIX${WHITE}\""
 echo -e "Be sure to verify that the game executable(s) written to \"${YELLOW}$GSS${WHITE}\" as:${YELLOW}\n"
 for i in "${!SELECTED_EXES[@]}"; do
-    echo -e "    $((i+1)): ${SELECTED_EXES[$i]}"
+    #echo -e "    $((i+1)): ${SELECTED_EXES[$i]}"
+    echo -e "    $((i+1)): ${GRAB_EXE[$i]}"
 done
 echo -e "${WHITE}and modify if necessary.${RESET}\n"
 
