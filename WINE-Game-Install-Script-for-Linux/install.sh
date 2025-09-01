@@ -10,12 +10,12 @@
 # a command-line parameter, and added a GameScope wrapper function for the launcher scripts. $WINEPREFIX is now
 # optional and can be provided on the commandline. If it doesn't exist, it will be created. Assumes a default
 # location as WINEPREFIX="/home/$(whoami)/Games/$NOSPACE" if not provided with "-p (or --prefix) {PREFIX}".
-# Due to the fact that some installers do "boxed sets" - that is, they install multiple games, this installer
-# script now allows you to select multiple .exe files, if so desired, for your launcher script. If you only
-# select one, the launcher writes a standard launcher script. If you select multiple, it writes a menu to the
-# launcher which prompts you to choose the .exe you want to run. The menu option text in the "echo" lines can
-# be changed later if you want to provide a proper title, so long as the GameScope wrapper is left alone. For
-# example, I've included my "Dishonored Collection" launcher menu as an example:
+# Due to the fact that some installers do "boxed sets" - that is, they install multiple games from a single
+# installer, this script now allows you to select multiple .exe files, if so desired, for your launcher script.
+# If you onlyselect one, the launcher writes a standard launcher script. If you select multiple, it writes a menu
+# to the launcher which prompts you to choose the .exe you want to run. The menu option text in the "echo" lines
+# can be changed later if you want to provide a proper title, so long as the GameScope wrapper is left alone. For
+# reference, I've included my modified "Dishonored Collection" launcher menu as an example:
 #
 # echo "Select a game to launch:"
 # echo "1) Dishonored"
