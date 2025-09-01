@@ -598,7 +598,7 @@ if [[ ${#SELECTED_EXES[@]} -eq 1 ]]; then
     EXE="$(basename "$rel_path")"
 
     cat << EOL >> "${GSS}"
-cd "\$GAMEDEST"
+cd "\$GAMEDEST/${exe_dir}"
 [[ -f "$EXE" ]] || { echo -e "Executable not found: $EXE"; exit 1; }
 
 do_gameScope "$EXE" "$@"
