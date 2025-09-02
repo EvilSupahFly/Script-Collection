@@ -158,7 +158,7 @@ pyvenv() {
     source "$v_home/bin/activate"
     echo -e "${WHITE}Activated virtual environment '${YELLOW}${v_name}${WHITE}'. Type 'deactivate' to exit.${RESET}"
 }
-
+# Automatic integreation: Stop at this line
 check_src() {
     # Check to see if the whole script is being sourced or running stand alone because this part shouldn't be included if sourced
     if [[ "$(ps -o ppid= -p $$)" -eq 1 ]]; then
