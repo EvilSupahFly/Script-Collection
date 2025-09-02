@@ -1,19 +1,22 @@
 #!/bin/bash
 
-# Want automatic integreation? Copy everything below this line into either /etc/bash.bashrc or $HOME/.bashrc and restart your terminal!
-# Moving these colour-code variables outside this function makes them available to the whole script, not just this function - useful if you're using BASH sources above.
+# Want automatic integreation? Copy the entire `pyvenv()` function into either /etc/bash.bashrc or $HOME/.bashrc and restart your terminal!
 
-# Define some fancy colourful text with BASH's built-in escape codes. Example:
-# echo -e "${YELLOW}This text will be displayed in BOLD YELLOW. ${RESET}While this text is normal."
-ULINE=$'\e[4m'
-YELLOW=$'\e[1;33m'
-RED=$'\e[1;91m'
-GREEN=$'\e[1;92m'
-WHITE=$'\e[1;97m'
-RESET=$'\e[0m'
-
-# Function to check and create a Python virtual environment using pythonz - v2
 pyvenv() {
+    # Function 'pyvenv' starts and enters a Python VENV, creating it if it doesn't exist. Also has a list feature, showing existing VENVs, and a Python version check:
+    #    Normal Usage: pyvenv venv version
+    #    List VENVs: pyvenv --list
+    #    Version Check: pyvenv --check-ver
+    
+    # Define some fancy colourful text with BASH's built-in escape codes. Example:
+    # echo -e "${YELLOW}This text will be displayed in BOLD YELLOW. ${RESET}While this text is normal."
+    ULINE=$'\e[4m'
+    YELLOW=$'\e[1;33m'
+    RED=$'\e[1;91m'
+    GREEN=$'\e[1;92m'
+    WHITE=$'\e[1;97m'
+    RESET=$'\e[0m'
+
     local CHECK=0
     local LIST=0
 
