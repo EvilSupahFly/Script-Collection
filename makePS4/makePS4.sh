@@ -313,3 +313,38 @@ batchPS4() {
     read -t 0 </dev/tty
     set -m
 }
+
+# PS4 Media Compliance Check
+check_ps4_compatibility() {
+  local file="$1"
+  local good=1
+
+  # Run ffprobe
+  mapfile -t info < <(ffprobe -hide_banner -v error -show_streams -show_format "$file")
+
+  local vcodec acodec pixfmt level profile num_streams data_streams
+
+  for line in "${info[@]}"; do
+    case "$line" in
+      codec_name=* )
+        [[ "$line" == codec_name=h264 && -z $vcodec ]] && vcodec=h264
+        [[ "$line" == codec_name=aac && -z $acodec ]] && acodec=aac
+        ;;
+      pix_fmt=* ) pixfmt="${line#pix_fmt=}";;
+      profile=* ) profile="${line#profile=}";;
+      level=* ) level="${line#level=}";;
+      codec_type=data ) data_streams=1;;
+    esac
+  done
+
+  # Check
+  (( vcodec != h264 )) && echo "$file: [FAIL] video codec = $vcodec" && good=0
+  [[ "$acodec" != "aac" ]] && echo "$file: [FAIL] audio codec = $acodec" && good=0
+  [[ "$pixfmt" != "yuv420p" ]] && echo "$file: [FAIL] pixel format = $pixfmt" && good=0
+  [[ "$profile"   != "High" ]]   && echo "$file: [FAIL] profile = $profile" && good=0
+  (( level > 40 )) && echo "$file: [FAIL] level = $level" && good=0
+  [[ -n "$data_streams" ]] && echo "$file: [FAIL] contains data stream" && good=0
+
+  (( good )) && echo "$file: [PASS] OK"
+  return $((1-good))
+}

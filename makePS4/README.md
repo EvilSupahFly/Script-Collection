@@ -3,7 +3,7 @@
 
 `makePS4` and `batchPS4` are Bash functions designed to convert video files into a **PlayStation-safe MP4 format** that plays reliably on **PS4 and PS5** via **DLNA or USB**, avoiding buffering, crashes, and codec incompatibilities. They're meant to be added to a user's `~/.bashrc` or to `/etc/bash.bashrc` for easy access, though you could make stand-alone scripts out of them, if you wanted.
 
-The design favours **boring but correct** defaults: predictable playback, stable bitrates, and formats Sony’s media players actually like.
+The design favours **boring but correct** defaults: predictable playback, stable bitrates, and formats Sony’s media players actually like. Offering no command-line arguments to either function will display help-text so you don't have to keep coming back here.
 
 ---
 
@@ -11,7 +11,7 @@ The design favours **boring but correct** defaults: predictable playback, stable
 
 * Guaranteed playback on **PS4 and PS5**
 * Outputs **MP4 (H.264 + AAC)** with strict compatibility
-* Automatically constrains bitrate for large source files
+* Automatically constrains bitrate for large source files (≥ 4 GB)
 * Skips files that already meet compatibility requirements
 * Preserves original directory structure
 * Batch processing with controlled concurrency
@@ -45,6 +45,7 @@ makePS4 "input_file.mkv"
 
 ### Behavior
 
+* Suuports `.avi`, `.mp4`, `.mkv`, and `.mov` files
 * Converts the file to `*-PS4.mp4` in the same directory
 * Skips conversion if the file already matches PS4 compatibility
 * Uses:
@@ -74,7 +75,7 @@ batchPS4 "MediaFolder" --MAX=6
 
 ### Behavior
 
-* Scans for `.mp4`, `.mkv`, and `.mov` files
+* Scans for `.avi`, `.mp4`, `.mkv`, and `.mov` files
 * Skips files already compatible with PS4
 * Runs conversions sequentially or with limited parallelism
 * No deletion prompts (safe for unattended runs)
