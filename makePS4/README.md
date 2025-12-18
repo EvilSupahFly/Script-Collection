@@ -1,7 +1,7 @@
 
 # makePS4 – PlayStation-Compatible Media Converter
 
-`makePS4` and `batchPS4` are Bash functions designed to convert video files into a **PlayStation-safe MP4 format** that plays reliably on **PS4 and PS5** via **DLNA or USB**, avoiding buffering, crashes, and codec incompatibilities, and meant to be added to a user's `~/.bashrc` or to `/etc/bash.bashrc` for easy access, though you could make stand-alone scripts out of them, if you wanted.
+`makePS4` and `batchPS4` are Bash functions designed to convert video files into a **PlayStation-safe MP4 format** that plays reliably on **PS4 and PS5** via **DLNA or USB**, avoiding buffering, crashes, and codec incompatibilities. They're meant to be added to a user's `~/.bashrc` or to `/etc/bash.bashrc` for easy access, though you could make stand-alone scripts out of them, if you wanted.
 
 The design favours **boring but correct** defaults: predictable playback, stable bitrates, and formats Sony’s media players actually like.
 
