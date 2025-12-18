@@ -1,18 +1,33 @@
 #!/usr/bin/env bash
 
 #set -eo pipefail
-#
+
 # This is nearing the final evolution of my Game Installer Script. Command-line parameters are now optional,
 # I've added colour to the output, the logic has been tweaked out a bit so now the script will check for WINE,
 # and attempt to install it, should it not be found, and I've also added commentary to each section to explain
-# what it all does and added extensive error handling. As far as features go, I was thinking of making both the
-# MSVC redist and Vulkan functions into something which could be called independently of actually performing an
-# install with a command-line parameter, but I don't really see the need at this point. $WINEPREFIX is optional
-# and can be provided on the commandline. If it doesn't exist, it will be created. Created a loop now, at the
-# end which asks for additional optional .exe files to take into account bundle installers - like Bioshock and
-# Dishonored - that can install multiple games in a series or franchise from a single installer. Now, the
-# launcher script can have an optional menu embedded which presents you with different target .exe files you
-# can potentially run in the prefix created (or updated) by this installer.
+# what it all does and added extensive error handling. As far as features go, I have made the MSVC redist,
+# Vulkan, MONO and GECKO installs functions which are called independently of actually performing an install with
+# a command-line parameter, and added a GameScope wrapper function for the launcher scripts. $WINEPREFIX is now
+# optional and can be provided on the commandline. If it doesn't exist, it will be created. Assumes a default
+# location as WINEPREFIX="/home/$(whoami)/Games/$NOSPACE" if not provided with "-p (or --prefix) {PREFIX}".
+# Due to the fact that some installers do "boxed sets" - that is, they install multiple games from a single
+# installer, this script now allows you to select multiple .exe files, if so desired, for your launcher script.
+# If you onlyselect one, the launcher writes a standard launcher script. If you select multiple, it writes a menu
+# to the launcher which prompts you to choose the .exe you want to run. The menu option text in the "echo" lines
+# can be changed later if you want to provide a proper title, so long as the GameScope wrapper is left alone. For
+# reference, I've included my modified "Dishonored Collection" launcher menu as an example:
+#
+# echo "Select a game to launch:"
+# echo "1) Dishonored"
+# echo "2) Dishonored 2"
+# echo "3) Dishonored: Death of the Outsider"
+# read -rp "Enter number: " choice
+# case "$choice" in
+#   1) cd "${GAMEDEST}/Dishonored/Binaries/Win32" && do_gameScope "Dishonored.exe" ;;
+#   2) cd "${GAMEDEST}/Dishonored 2" && do_gameScope "Dishonored2.exe" ;;
+#   3) cd "${GAMEDEST}/Dishonored - Death of the Outsider" && do_gameScope "Dishonored_DO.exe" ;;
+#   *) echo "Invalid selection." ;;
+# esac
 
 # Function: showHelp
 # Purpose: Displays usage help and exits
@@ -62,7 +77,8 @@ grab_exe_list() {
         IFS= read -r -p "Select an .exe file: " user_sel
         if [[ "$user_sel" =~ ^[0-9]+$ && "$user_sel" -lt "${#_result[@]}" ]]; then
             # shellcheck disable=SC2207
-            _chosen="$(basename "${_result[$user_sel]}")"
+            #_chosen="$(basename "${_result[$user_sel]}")"
+            _chosen="${_result[$user_sel]}"
             return 0
         else
             echo -e "\n${YELLOW}\"$user_sel\" ${RED}is not a valid choice.${WHITE}\n"
@@ -89,7 +105,7 @@ install_vulkan() {
     # Install or update Vulkan. Ping GIT HUB to verify network connectivity, then get the latest version of VULKAN,
     # compare to what's installed (if any), and download and install the latest version if there's either none already
     # installed or the installed version is older than the current release. Downloads are deleted after install.
-    ping -c 1 github.com >/dev/null || { echo -e "${RED}Possibly no network. Booting might fail.${WHITE}" ; }
+    curl -s --head https://github.com | grep "200 OK" >/dev/null || { echo -e "${RED}Possibly no network. Booting might fail.${WHITE}" ; }
     VLKLOG="$WINEPREFIX/vulkan.log"; VULKAN="$PWD/vulkan"; VLKVER="$(curl -s -m 5 https://api.github.com/repos/jc141x/vulkan/releases/latest | awk -F '["/]' '/"browser_download_url":/ {print $11}' | cut -c 1-)"
     status-vulkan() {
         [[ ! -f "$VLKLOG" || -z "$(awk "/^${FUNCNAME[1]}\$/ {print \$1}" "$VLKLOG" 2>/dev/null)" ]] || { echo -e "${FUNCNAME[1]} present" && return 1; };
@@ -165,19 +181,11 @@ IFS=$'\n'
 
 # Define some fancy colourful text with BASH's built-in escape codes. Example:
 # echo -e "${BOLD}${YELLOW}This text will be displayed in BOLD YELLOW. ${RESET}While this text is normal."
-#BOLD="\033[1m"
-#RESET="\e[0m" #Normal
-#ULINE="\033[4m"
-#YELLOW="${BOLD}\e[1;33m"
-#RED="${BOLD}\e[1;91m"
-#GREEN="${BOLD}\e[1;92m"
-#WHITE="${BOLD}\e[1;97m"
 ULINE=$'\e[4m'
 YELLOW=$'\e[1;33m'
 RED=$'\e[1;91m'
 GREEN=$'\e[1;92m'
 WHITE=$'\e[1;97m'
-# Normal
 RESET=$'\e[0m'
 
 # -----------------------------
@@ -212,13 +220,13 @@ while [[ $# -gt 0 ]]; do
         -*|--*)
             echo "Warning: Ignoring unknown option '$1'" >&2; shift;;
         *)
-            POSITIONAL+=("$1"); GAMEDIR="$1"; shift;;
+            POSITIONAL+=("$1"); GAMEDEST="$1"; shift;;
     esac
 done
 
 if [[ ${#POSITIONAL[@]} -gt 1 ]]; then
     echo -e "${RED}Note: Multiple folders given: ${WHITE}${POSITIONAL[*]}"
-    echo -e "${RED}Only the last one (${WHITE}${GAMEDIR}${RED}) will be used.${RESET}"
+    echo -e "${RED}Only ${WHITE}${GAMEDEST}${RED} will be used.${RESET}"
 fi
 
 # restore positional parameters: $1 is now your game-folder (if any)
@@ -247,8 +255,6 @@ if [[ -z "$1" ]]; then
         else
             echo -e "${ULINE}${GREEN}$i: ${GDIRS[$i]%/}${RESET}${WHITE}"
         fi
-        #dir="${GDIRS[$i]%/}"
-        #echo -e "$i: $dir"
     done
     # Ask for input based on the list, looping until a valid response is given
     while true; do
@@ -291,21 +297,13 @@ else
 fi
 
 NOSPACE="${ONE// /_}"
-echo -e "\nThis script will attempt to install WINE for you if it isn't already installed."
+echo -e "${WHITE}\nThis script will attempt to install WINE for you if it isn't already installed."
 echo -e "As such, it would be ${ULINE}${YELLOW}REALLY HELPFUL${RESET}${WHITE} if you have Internet access."
 echo -e "It's also largely failproof, so if it encounters something it can't fix, or something"
 echo -e "which can't be fixed later by tweaking the runner script, it will exit with a fatal"
-echo -e "error. Everything is mostly automated, only requiring you to answer a few prompts.\n"
+echo -e "error. Everything is mostly automated, only requiring you to answer a few prompts."
 # shellcheck disable=SC2162
 read -r -p $'\nTo continue, press '"${YELLOW}"'<ENTER>'"${WHITE}"'. To cancel, press '"${YELLOW}"'<CTRL-C>'"${WHITE}"'. ' donext
-
-#for arg in "$@"; do
-#    if [[ "$arg" =~ ^prefix= ]]; then
-#        #CUSTOM_PREFIX="${arg#prefix=}"
-#        echo -n "${WHITE}Custom Prefix = $CUSTOM_PREFIX${RESET}"
-#        break
-#    fi
-#done
 
 # If WINE check fails, determine package manager.
 # Next, check if WINE repo is already added. If not, add it.
@@ -375,11 +373,12 @@ WINEDLLOVERRIDES="winemenubuilder.exe=d;mshtml=d;dxgi=n;mscoree,mshtml=" #;nvapi
 # Install or update MONO and GECKO
 do_mono_gecko
 
-#WINEPREFIX="/home/$(whoami)/Game_Storage" # Create Wineprefix if it doesn't exist
+# Create Wineprefix if it doesn't exist
 if [[ -n "$CUSTOM_PREFIX" ]]; then
     WINEPREFIX="$CUSTOM_PREFIX"
     echo -e "${GREEN}Using custom prefix ${WHITE}${WINEPREFIX}${RESET}"
 else
+    #WINEPREFIX="/home/$(whoami)/Game_Storage"
     WINEPREFIX="/home/$(whoami)/Games/$NOSPACE"
     echo -e "${GREEN}Using default prefix ${WHITE}${WINEPREFIX}${RESET}"
 fi
@@ -433,57 +432,32 @@ fi
 
 # Create an array containing all the .exe files.
 # If there aren't any .exe files in the directory, exit with an error
-# TODO: Make this a function to reduce code duplication
-
 grab_exe_list "$G_SRC" GRAB_EXE EXE
 # shellcheck disable=SC2181
 [ $? -ne 0 ] && exit 255
-EXE=$(basename "$EXE")
-# Print the contents of the array and ask for input, looping until a valid response is recieved, choose color based on even or odd index
-#echo -e "\n${YELLOW}Installer options:${WHITE}\n"
+SETUPEXE=$(basename "$EXE")
 
-#for ((i=0; i<"${#GRAB_EXE[@]}"; i++)); do
-#    if ((i % 2 == 0)); then
-#        echo -e "${ULINE}${WHITE}$i: ${GRAB_EXE[$i]}${RESET}${WHITE}"
-#    else
-#        echo -e "${ULINE}${GREEN}$i: ${GRAB_EXE[$i]}${RESET}${WHITE}"
-#    fi
-#done
-#
-#echo -e "${WHITE}"
-#while true; do
-#    IFS= read -r -p "Select an installer: " instsel
-#    if [[ "$instsel" =~ ^[0-9]+$ && "$instsel" -le "${#GRAB_EXE[@]}" ]]; then
-#        EXE=$(basename "${GRAB_EXE[$instsel]}")
-#        echo
-#        break
-#    else
-#        echo -e "\n${RED}That wasn't an option. ${WHITE}Please choose a valid number.\n"
-#    fi
-#done
-
-# If $GAMEDIR doesn't exist, create it
+# If $GAMEDEST doesn't exist, create it
 [ ! -d "$GAMEDEST" ] && mkdir -p "$GAMEDEST"
 
 # Print variables, their contents, and an explanatory note for verification.
-echo -e "\n${WHITE}Technical details, if you care:\n"
+echo -e "\n${WHITE}Technical details, if you care:"
 echo -e "\n${YELLOW}    \$GSS=\"$GSS\""
 echo -e "    \$G_SRC=\"$G_SRC\""
 echo -e "    \$WINEPREFIX=\"$WINEPREFIX\""
 echo -e "    \$GAMEDEST=\"$GAMEDEST\""
 echo -e "    \$WINEDLLOVERRIDES=\"winemenubuilder.exe=d;mshtml=d;nvapi,nvapi64=y\""
-echo -e "    \$WINE_LARGE_ADDRESS_AWARE=1\n"
-echo -e "\n        Installer=\"$EXE\"${WHITE}\n"
-echo -e "\n  I ${YELLOW}${ULINE}***STRONGLY***${RESET}${WHITE} recommend picking the folder \"${ULINE}${YELLOW}$GAMEDIR${RESET}${WHITE}\""
+echo -e "    \$WINE_LARGE_ADDRESS_AWARE=1"
+echo -e "\n  I  ${YELLOW}${ULINE}***STRONGLY***${RESET}${WHITE}  recommend picking the folder \"${ULINE}${YELLOW}$GAMEDEST${RESET}${WHITE}\""
 echo -e "  when the installer launches. For the sake of automation, this installer script creates the directory using"
-echo -e "  the placeholder \"${YELLOW}\$GAMEDIR${WHITE}\", and that's where the launcher script will expect it to be.\n"
-echo -e "\n  If the installer doesn't default to C:\Games\\$1 you can change it using the advanced options.\n"
+echo -e "  the placeholder \"${YELLOW}\$GAMEDEST${WHITE}\", and that's where the launcher script will expect it to be."
+echo -e "\n  If the installer doesn't default to \"${YELLOW}C:\Games\\${1}${WHITE}\" you can change it using the advanced options."
 echo -e "\n  Also, you don't need to install DirectX or the MSVC Redistributables from the installer menu."
 echo -e "  Vulkan replaces DirectX, and the MSVC Redistributables can be (re)installed any time by running this script again."
-echo -e "  This install scripthandles all that, as you have no doubt already noticed.\n"
+echo -e "  This install scripthandles all that, as you have no doubt already noticed."
 echo -e "\n  If you let the game's installer use a different folder, you will have to manually change the path and possibly the"
-echo -e "  filename for the game's primary ${YELLOW}.exe ${WHITE}in the ${YELLOW}$GSS ${WHITE}script to match.\n"
-echo -e "\n  If you do modify the launcher script, remember that paths and files are ${RED}Case Sensitive${WHITE} on Linux.\n"
+echo -e "  filename for the game's primary ${YELLOW}.exe ${WHITE}in the ${YELLOW}$GSS ${WHITE}script to match."
+echo -e "\n  If you do modify the launcher script, remember that paths and files are ${RED}Case Sensitive${WHITE} on Linux."
 # shellcheck disable=SC2034
 read -r -p $'\nTo continue, press '"${YELLOW}"'<ENTER>'"${WHITE}"'. To cancel, press '"${YELLOW}"'<CTRL-C>'"${WHITE}"'. ' donext
 
@@ -498,63 +472,69 @@ read -r -p $'\nTo continue, press '"${YELLOW}"'<ENTER>'"${WHITE}"'. To cancel, p
 export DXVK_ENABLE_NVAPI=1
 
 # Start WINE and pass the primary installer .EXE to it.
-echo -e "\n${WHITE}Starting \"${YELLOW}${ONE}${WHITE}\" installer...\n"
+echo -e "\n${WHITE}Starting \"${YELLOW}${ONE}${WHITE}\" installer..."
 # shellcheck disable=SC2164
 cd "$G_SRC" # This is the source folder for the .exe
 #Run WINE with an "If It Fails" assumption block.
-if ! "$WINE" "$EXE" "$@" >/dev/null 2>&1; then
+if ! "$WINE" "$SETUPEXE" "$@" >/dev/null 2>&1; then
     # If it did fail, save the error number and exit with a message.
     ERRNUM=$?
-    echo -e "\n${RED}Error code ${YELLOW}$ERRNUM ${RED} detected on exit.\n${WHITE}Looks like something went wrong.\nUnfortunately, since ${RED}$ERRNUM${WHITE} is a Windows-related error, I can't help you.\n${RESET}"
+    echo -e "\n${RED}Error code ${YELLOW}$ERRNUM ${RED}detected on exit.\n${WHITE}Looks like something went wrong.\nUnfortunately, since ${RED}$ERRNUM${WHITE} is a Windows-related error, I can't help you.\n${RESET}"
     exit 255
 fi
 
-# We used this once already so we're blanking it so we can reuse it
+# We used these once already so we're blanking them so we can use them again
 EXE=""
 GRAB_EXE=""
 DO_GSS="y"
-GAMEDIR=""
+SELECTED_EXES=()
 
-# This is the destination folder, originally set at the start: GAMEDEST="$WINEPREFIX/drive_c/Games/$ONE"
 cd "$GAMEDEST" || exit 1
 
-grab_exe_list "$GAMEDEST" GRAB_EXE EXE
-if [ $? -ne 0 ]; then
-    echo -e "\n${WHITE}\"${RED}$G_SRC${WHITE}\" doesn't contain any .exe files.\n\n${YELLOW} ლ(ಠ益ಠ)ლ ${WHITE}\n\n"
+# Run grab_exe_list to populate GRAB_EXE and EXE
+if ! grab_exe_list "$GAMEDEST" GRAB_EXE EXE; then
+    echo -e "\n${WHITE}\"${RED}${GAMEDEST}${WHITE}\" doesn't contain any .exe files.\n\n${YELLOW} ლ(ಠ益ಠ)ლ ${WHITE}\n\n"
     IFS= read -r -p "Continue anyway? You'll have to manually edit the launcher script. (y/n) " DO_GSS
     case $DO_GSS in
         [nN] ) echo -e "${RED}Stopping as requested.${RESET}"; exit 255;;
         * ) SELECTED_EXES=("Just A Place Holder - Replace Me With Game's Actual .EXE");;
     esac
 else
-    SELECTED_EXES=()
-    while true; do
-        echo -e "\n${WHITE}Game runner options:\n"
-        for ((i=0; i<"${#GRAB_EXE[@]}"; i++)); do
-            color=$((i % 2)) && color=$([[ $color -eq 0 ]] && echo "$WHITE" || echo "$GREEN")
-            echo -e "${ULINE}${color}$i: ${GRAB_EXE[$i]}${RESET}${WHITE}"
-        done
-        echo -e "\n${WHITE}Selected so far:${YELLOW}"
-        printf '  %s\n' "${SELECTED_EXES[@]}"
-        echo -e "${WHITE}"
-
-        IFS= read -r -p "Select game .EXE (or 'q' to finish): " gamesel
-        if [[ "$gamesel" =~ ^[QqXx]$ ]]; then
-            break
-        elif [[ "$gamesel" =~ ^[0-9]+$ && $gamesel -lt ${#GRAB_EXE[@]} ]]; then
-            selected="${GRAB_EXE[$gamesel]}"
-            if [[ ! " ${SELECTED_EXES[*]} " =~ " $selected " ]]; then
-                SELECTED_EXES+=("$selected")
-            else
-                echo -e "${YELLOW}Already selected.${WHITE}"
-            fi
-        else
-            echo -e "\n${YELLOW}$gamesel ${RED}wasn't a valid number.${WHITE}\n"
-        fi
-    done
+    if [ -n "$EXE" ]; then
+        SELECTED_EXES+=("$EXE")
+    fi
 fi
 
-echo -e "\n${WHITE}Game Destination: \"${YELLOW}$GAMEDEST${WHITE}\" (\"C:\Games\\$ONE\")\n\nWriting Game Starter Script (GSS) for ${YELLOW}$ONE ${WHITE}to ${YELLOW}$GSS ${WHITE}...\n"
+while true; do
+    echo -e "\n${WHITE}Additional game runner options:\n"
+    for ((i=0; i<"${#GRAB_EXE[@]}"; i++)); do
+        if (( i % 2 == 0 )); then
+            color="$WHITE"
+        else
+            color="$GREEN"
+        fi
+        echo -e "${ULINE}${color}$i: ${GRAB_EXE[$i]}${RESET}${WHITE}"
+    done
+    echo -e "\n${WHITE}Selected so far:${YELLOW}"
+    printf '  %s\n' "${SELECTED_EXES[@]}"
+    echo -e "${WHITE}"
+
+    IFS= read -r -p "Select game .EXE (or 'q' to finish): " gamesel
+    if [[ "$gamesel" =~ ^[QqXx]$ ]]; then
+        break
+    elif [[ "$gamesel" =~ ^[0-9]+$ && $gamesel -lt ${#GRAB_EXE[@]} ]]; then
+        selected="${GRAB_EXE[$gamesel]}"
+        if [[ ! " ${SELECTED_EXES[*]} " =~ " $selected " ]]; then
+            SELECTED_EXES+=("$selected")
+        else
+            echo -e "${YELLOW}Already selected.${WHITE}"
+        fi
+    else
+        echo -e "\n${YELLOW}$gamesel ${RED}wasn't a valid number.${WHITE}\n"
+    fi
+done
+
+echo -e "\n${WHITE}Game Destination is \"${YELLOW}${GAMEDEST}${WHITE}\" in Linux (or \"${YELLOW}C:\Games\\${ONE}${WHITE}\" in Windows).\n\nWriting Game Starter Script (GSS) for ${YELLOW}${ONE}${WHITE} to ${YELLOW}${GSS} ${WHITE}...\n"
 
 # Create game starter script by writing everything up to "EOL" in the file defined in $GSS
 cat << EOL > "${GSS}"
@@ -564,6 +544,20 @@ cat << EOL > "${GSS}"
 ## Script Name:
 ## $GSS
 ###############
+
+# Wrapper to run a game EXE with or without GameScope
+do_gameScope() {
+    local app="\$1"
+    shift
+    if command -v gamescope &>/dev/null; then
+        echo "Launching with GameScope (display: \$PRIMARY_DISPLAY)..."
+        exec gamescope -e --adaptive-sync -O "\$PRIMARY_DISPLAY" -- \
+             "\$WINE" "\$app" "\$@"
+    else
+        echo "GameScope not found. Launching game directly..."
+        exec "\$WINE" "\$app" "\$@"
+    fi
+}
 
 # Change the current working directory to the one the scipt was run from
 cd "\$(dirname "\$(readlink -f "\$0")")" || exit; [ "\$EUID" = "0" ] && echo -e "Please don't run as root!" && exit
@@ -575,11 +569,13 @@ export WINEDLLOVERRIDES="winemenubuilder.exe=d;mshtml=d;dxgi=n"
 export WINE_LARGE_ADDRESS_AWARE=1
 #export RESTORE_RESOLUTION=1
 #export WINE_D3D_CONFIG="renderer=vulkan"
-export GAMEDIR="$GAMEDIR"
+export GAMEDEST="\${WINEPREFIX}/drive_c/Games/${ONE}"
 export DXVK_ENABLE_NVAPI=1
+export PRIMARY_DISPLAY=\${PRIMARY_DISPLAY:-0}
 
 # Check Vulkan version and download and install if there's a newer version available online
-ping -c 1 github.com >/dev/null || { echo -e "Possibly no network. This may mean that booting will fail." ; }; VLKLOG="\$WINEPREFIX/vulkan.log"; VULKAN="\$PWD/vulkan"
+
+curl -s --head https://github.com | grep "200 OK" >/dev/null || { echo -e "Possibly no network. This may mean that booting will fail." ; }; VLKLOG="\$WINEPREFIX/vulkan.log"; VULKAN="\$PWD/vulkan"
 VLKVER="\$(curl -s -m 5 https://api.github.com/repos/jc141x/vulkan/releases/latest | awk -F '["/]' '/"browser_download_url":/ {print \$11}' | cut -c 1-)"
 status-vulkan() { [[ ! -f "\$VLKLOG" || -z "\$(awk "/^\${FUNCNAME[1]}\$/ {print \$1}" "\$VLKLOG" 2>/dev/null)" ]] || { echo -e "\${FUNCNAME[1]} present" && return 1; }; }
 vulkan() { DL_URL="\$(curl -s https://api.github.com/repos/jc141x/vulkan/releases/latest | awk -F '["]' '/"browser_download_url":/ {print \$4}')"; VLK="\$(basename "\$DL_URL")"
@@ -589,24 +585,39 @@ vulkan-dl() { echo -e "Using external vulkan translation (dxvk,vkd3d,dxvk-nvapi)
 [[ ! -f "\$VLKLOG" && -z "\$(status-vulkan)" ]] && vulkan-dl;
 [[ -f "\$VLKLOG" && -n "\$VLKVER" && "\$VLKVER" != "\$(awk '{print \$1}' "\$VLKLOG")" ]] && { rm -f vulkan.tar.xz || true; } && vulkan-dl
 
+# Detect primary display (auto handles multi-monitor)
+PRIMARY_DISPLAY=\$(xrandr --query | awk '/ primary/{print \$1; exit}')
+# Start process in WINE with GameScope, if available
 EOL
 
 if [[ ${#SELECTED_EXES[@]} -eq 1 ]]; then
-    EXE=$(basename "${SELECTED_EXES[0]}")
+    full_path="${SELECTED_EXES[0]}"
+    rel_path="${full_path#$GAMEDEST/}"
+    exe_dir="$(dirname "$rel_path")"
+    EXE="$(basename "$rel_path")"
+    if [[ "$exe_dir" == "." ]]; then
+        exe_dir=""
+    fi
     cat << EOL >> "${GSS}"
+cd "\$GAMEDEST/${exe_dir}"
+[[ -f "$EXE" ]] || { echo -e "Executable not found: $EXE"; exit 1; }
 
-# Start process in WINE
-cd "\$GAMEDIR"
-"\$WINE" "$EXE" "\$@"
+do_gameScope "$EXE" "$@"
+
 EOL
 
 else
-    cat << 'EOL' >> "${GSS}"
+    # Start the menu section
+    cat << EOL >> "${GSS}"
 
-# Start process in WINE
+# --- Auto-generated game menu ---
+# You can edit the "echo" labels below to make them friendlier,
+# or change the paths if you installed the game in a different folder.
+
 echo "Select a game to launch:"
 EOL
 
+    # Numbered menu
     for i in "${!SELECTED_EXES[@]}"; do
         label=$(basename "${SELECTED_EXES[$i]}")
         printf 'echo "%s) %s"\n' "$((i+1))" "$label" >> "$GSS"
@@ -617,10 +628,18 @@ read -rp "Enter number: " choice
 case "$choice" in
 EOL
 
+    # Case branches that cd into $GAMEDEST-relative dirs
     for i in "${!SELECTED_EXES[@]}"; do
-        dir=$(dirname "${SELECTED_EXES[$i]}")
-        exe=$(basename "${SELECTED_EXES[$i]}")
-        printf '  %s) cd "%s" && "$WINE" "%s" "$@" ;;\n' "$((i+1))" "$dir" "$exe" >> "$GSS"
+        rel="${SELECTED_EXES[$i]#"$GAMEDEST"/}"
+        rdir=$(dirname "$rel")
+        rex=$(basename "$rel")
+        if [[ "$rdir" == "." ]]; then
+            printf '  %s) cd "$GAMEDEST" && do_gameScope "%s" "$@" ;;\n' \
+                "$((i+1))" "$rex" >> "$GSS"
+        else
+            printf '  %s) cd "$GAMEDEST/%s" && do_gameScope "%s" "$@" ;;\n' \
+                "$((i+1))" "$rdir" "$rex" >> "$GSS"
+        fi
     done
 
     cat << 'EOL' >> "${GSS}"
@@ -632,13 +651,19 @@ fi
 # Make the script executable and present a recap
 chmod a+x "$GSS"
 echo -e "\n"
-#cat "$GSS"
-echo -e "\n${WHITE}\"${YELLOW}$GSS${WHITE}\" has been written and made executable.\n\nIf you aren't running an nVidia GPU, you should change this:\n"
-echo -e "\n        ${YELLOW}export WINEDLLOVERRIDES=\"winemenubuilder.exe=d;mshtml=d;nvapi,nvapi64=n;dxgi=n\"\n"
-echo -e "\n${WHITE}to this:\n"
-echo -e "\n        ${YELLOW}export WINEDLLOVERRIDES=\"winemenubuilder.exe=d;mshtml=d\"${WHITE}\n"
-echo -e "\nIt probably won't cause any problems for non-nVidia GPUs, but it's best just to be safe.\n"
-echo -e "\nThe full path of your ${YELLOW}$ONE ${WHITE}wineprefix is: \"${YELLOW}$WINEPREFIX${WHITE}\"\n"
-echo -e "\nBe sure to verify that the game executable written to \"${YELLOW}$GSS${WHITE}\" is actually \"${YELLOW}$EXE${WHITE}\" and modify if necessary.${RESET}\n"
+cat "$GSS"
+read -r -p $'\nThis is '"${YELLOW}${GSS}${WHITE}"'. Please review and press '"${YELLOW}"'<ENTER>'"${WHITE}"' to continue.' donext
+echo -e "\n${WHITE}\"${YELLOW}$GSS${WHITE}\" has been written and made executable.\n\nIf you aren't running an nVidia GPU, you should change this:"
+echo -e "        ${YELLOW}export WINEDLLOVERRIDES=\"winemenubuilder.exe=d;mshtml=d;nvapi,nvapi64=n;dxgi=n\""
+echo -e "${WHITE}to this:"
+echo -e "        ${YELLOW}export WINEDLLOVERRIDES=\"winemenubuilder.exe=d;mshtml=d\"${WHITE}"
+echo -e "It probably won't cause any problems for non-nVidia GPUs, but it's best just to be safe."
+echo -e "The full path of your ${YELLOW}$ONE ${WHITE}wineprefix is: \"${YELLOW}$WINEPREFIX${WHITE}\""
+echo -e "Be sure to verify that the game executable(s) written to \"${YELLOW}$GSS${WHITE}\" as:${YELLOW}\n"
+for i in "${!SELECTED_EXES[@]}"; do
+    #echo -e "    $((i+1)): ${SELECTED_EXES[$i]}"
+    echo -e "    $((i+1)): ${GRAB_EXE[$i]}"
+done
+echo -e "\n${WHITE}and modify if necessary.${RESET}\n"
 
 exit 0
