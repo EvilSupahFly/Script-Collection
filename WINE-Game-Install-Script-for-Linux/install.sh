@@ -246,6 +246,8 @@ LAUNCHER=""
 CUSTOM_PREFIX=""
 EXE=""
 DBG=""
+DLL_OVERRIDES="winemenubuilder.exe=d"
+#DLL_OVERRIDES="winemenubuilder.exe=d;mshtml=d;dxgi=n;mscoree,=d;nvapi,nvapi64=n" # Set environment variables for WINE
 # -----------------------------
 # Parse flags
 # -----------------------------
@@ -437,9 +439,12 @@ else
     WINE="$(command -v wine)"
 fi
 WINEVER="$(wine --version)" # Get the WINE version number
-#WINE_LARGE_ADDRESS_AWARE=1
-#WINEDLLOVERRIDES="winemenubuilder.exe=d;mshtml=d;dxgi=n;mscoree,mshtml=" #;nvapi,nvapi64=n" # Set environment variables for WINE
-
+WINE_LARGE_ADDRESS_AWARE=1
+STAGING_RT_PRIORITY_SERVER=99
+WINEDLLOVERRIDES="$DLL_OVERIDES"
+STAGING_WRITECOPY=1
+STAGING_SHARED_MEMORY=1
+#export WINE_D3D_CONFIG="renderer=vulkan"
 G_SRC="$PWD/$ONE" # Game Source Folder (where the setup is)
 GAMEDEST="$WINEPREFIX/drive_c/Games/$ONE" # Game Destination Folder (where it's going to be)
 GSS="$WINEPREFIX/drive_c/${NOSPACE}.sh" # Game Starter Script - written automatically by this script
@@ -450,6 +455,11 @@ export WINEVER
 export WINE_LARGE_ADDRESS_AWARE
 export WINEDLLOVERRIDES
 export WINEPREFIX
+export STAGING_RT_PRIORITY_SERVER
+export WINEDLLOVERRIDES
+export STAGING_WRITECOPY
+export STAGING_SHARED_MEMORY
+#export WINE_D3D_CONFIG
 export G_SRC
 export GAMEDEST
 export GSS
@@ -652,13 +662,17 @@ cd "\$(dirname "\$(readlink -f "\$0")")" || exit; [ "\$EUID" = "0" ] && echo -e 
 # Make sure WINE is configured (although, I'm assuming it was done by the original installer script)
 export WINE="\$(command -v wine)"
 export WINEPREFIX="$WINEPREFIX"
-export WINEDLLOVERRIDES="winemenubuilder.exe=d;mshtml=d;dxgi=n"
+export WINEDLLOVERRIDES="$DLL_OVERRIDES"
 export WINE_LARGE_ADDRESS_AWARE=1
 #export RESTORE_RESOLUTION=1
 #export WINE_D3D_CONFIG="renderer=vulkan"
 export GAMEDEST="\${WINEPREFIX}/drive_c/Games/${ONE}"
 export DXVK_ENABLE_NVAPI=1
 export PRIMARY_DISPLAY=\${PRIMARY_DISPLAY:-0}
+export STAGING_RT_PRIORITY_SERVER=99
+export STAGING_WRITECOPY=1
+export STAGING_SHARED_MEMORY=1
+
 EOL
 
 if [[ $SKIP_VULKAN = false ]]; then cat << EOL >> "${GSS}"
