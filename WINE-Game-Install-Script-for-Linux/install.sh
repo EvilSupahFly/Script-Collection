@@ -766,7 +766,7 @@ echo -e "The full path of your ${YELLOW}$ONE ${WHITE}wineprefix is: \"${YELLOW}$
 echo -e "Be sure to verify that the game executable(s) written to \"${YELLOW}$GSS${WHITE}\" as:${YELLOW}\n"
 for i in "${!SELECTED_EXES[@]}"; do
     #echo -e "    $((i+1)): ${SELECTED_EXES[$i]}"
-    echo -e "    $((i+1)): ${GRAB_EXE[$i]}"
+    echo -e "    $((i)): ${GRAB_EXE[$i]}"
 done
 echo -e "\n${WHITE}and modify if necessary.${RESET}\n"
 if [ "$DBG" = "true" ]; then
