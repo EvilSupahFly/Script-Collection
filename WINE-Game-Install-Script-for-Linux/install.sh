@@ -224,6 +224,16 @@ do_mono_gecko() {
     echo -e "${GREEN}[✓] Mono and Gecko installers are up to date in $WINE_CACHE"
 }
 
+detect_pkgmgr() {
+    for pm in apt dnf pacman zypper; do
+        if command -v "$pm" >/dev/null 2>&1; then
+            echo "$pm"
+            return 0
+        fi
+    done
+    return 1
+}
+
 IFS=$'\n'
 
 # Define some fancy colourful text with BASH's built-in escape codes. Example:
@@ -247,6 +257,7 @@ CUSTOM_PREFIX=""
 EXE=""
 DBG=""
 DLL_OVERRIDES="winemenubuilder.exe=d"
+NVAPI=";nvapi,nvapi64=n"
 #DLL_OVERRIDES="winemenubuilder.exe=d;mshtml=d;dxgi=n;mscoree,=d;nvapi,nvapi64=n" # Set environment variables for WINE
 # -----------------------------
 # Parse flags
@@ -265,7 +276,7 @@ while [[ $# -gt 0 ]]; do
         -v|--skip-vulkan)
             SKIP_VULKAN=true; shift;;
         -d|--debug)
-            DBG=true; shift;;
+            DBG=true; WINEDEBUG="-all"; shift;;
         #-p|--prefix)
         #    CUSTOM_PREFIX="$2"; shift 2;;
         -p|--prefix)
@@ -377,56 +388,55 @@ fi
 # Next, check if WINE repo is already added. If not, add it.
 # Refresh package cache and install WINE
 echo -e "${YELLOW}Checking for WINE..."; sleep 1
-if ! command -v wine &> /dev/null; then
-    echo -e "\n${RED}WINE isn't installed. ${WHITE}Attempting to rectify...\n"
-    if command -v apt &> /dev/null; then
-        PMGR="apt"
-        INST="sudo apt install -y --install-recommends winehq-stable winetricks"
-        REPO="sudo add-apt-repository -y ppa:wine/wine-builds"
-        if ! grep -q "wine/wine-builds" /etc/apt/sources.list /etc/apt/sources.list.d/*; then
-            eval "$REPO"
-        fi
-    elif command -v dnf &> /dev/null; then
-        PMGR="dnf"
-        INST="sudo dnf install -y wine"
-        REPO="sudo dnf config-manager --add-repo https://dl.winehq.org/wine-builds/fedora/$(rpm -E %fedora)/winehq.repo"
-        if ! dnf repolist | grep -q "winehq"; then
-            eval "$REPO"
-        fi
-    elif command -v pacman &> /dev/null; then
-        PMGR="pacman"
-        INST="sudo pacman -S --noconfirm wine"
-        REPO="echo '[wine]' | sudo tee /etc/pacman.d/wine.conf"
-        if ! pacman -Slq | grep -q "wine"; then
-            eval "$REPO"
-        fi
-    elif command -v zypper &> /dev/null; then
-        PMGR="zypper"
-        INST="sudo zypper install wine"
-        REPO="echo 'deb http://download.opensuse.org/repositories/Emulators:/Wine/openSUSE_Tumbleweed/ /' | sudo tee /etc/apt/sources.list.d/wine.list"
-        if ! zypper lr | grep -q "Wine"; then
-            eval "$REPO"
-        fi
-    else
-        echo -e "\n${RED}What are you even running this on? This won't work.${RESET}\n"
-        exit 255
+
+PMGR="$(detect_pkgmgr)" || {
+    echo -e "\n${RED}Unsupported system: no known package manager found.${RESET}\n"
+    exit 255
+}
+
+case "$PMGR" in
+    apt)
+        PM_REPO_CHECK='grep -q "wine/wine-builds" /etc/apt/sources.list /etc/apt/sources.list.d/*'
+        PM_REPO_ADD='sudo add-apt-repository -y ppa:wine/wine-builds'
+        PM_UPDATE='sudo apt update'
+        PM_INSTALL='sudo apt install -y --install-recommends'
+        ;;
+    dnf)
+        PM_REPO_CHECK='dnf repolist | grep -q winehq'
+        PM_REPO_ADD='sudo dnf config-manager --add-repo https://dl.winehq.org/wine-builds/fedora/$(rpm -E %fedora)/winehq.repo'
+        PM_UPDATE='sudo dnf makecache'
+        PM_INSTALL='sudo dnf install -y'
+        ;;
+    pacman)
+        PM_REPO_CHECK='pacman -Slq | grep -q wine'
+        PM_REPO_ADD='echo "[wine]" | sudo tee /etc/pacman.d/wine.conf'
+        PM_UPDATE='sudo pacman -Sy'
+        PM_INSTALL='sudo pacman -S --noconfirm'
+        ;;
+    zypper)
+        PM_REPO_CHECK='zypper lr | grep -q Wine'
+        PM_REPO_ADD='sudo zypper ar -f https://download.opensuse.org/repositories/Emulators:/Wine/openSUSE_Tumbleweed/ Wine'
+        PM_UPDATE='sudo zypper refresh'
+        PM_INSTALL='sudo zypper install -y'
+        ;;
+    *)
+        return 1
+        ;;
+esac
+
+if ! command -v wine >/dev/null 2>&1; then
+    echo -e "\n${RED}WINE isn't installed. ${WHITE}Attempting to install...\n"
+
+    if ! eval "$REPO_CHECK"; then
+        eval "$REPO_ADD"
     fi
 
-    # Refresh the package manager's repository cache
-    if [ "$PMGR" = "apt" ]; then
-        sudo apt update
-    elif [ "$PMGR" = "dnf" ]; then
-        sudo dnf makecache
-    elif [ "$PMGR" = "pacman" ]; then
-        sudo pacman -Sy
-    elif [ "$PMGR" = "zypper" ]; then
-        sudo zypper refresh
-    fi
+    eval "$UPDATE_CMD"
 
-    if ! eval "$INST"; then
+    if ! eval "$INSTALL_CMD"; then
         ERRNUM=$?
-        echo -e "\n${RED}Fatal error ${WHITE}$ERRNUM ${RED}occurred installing WINE. ٩(๏̯๏)۶ \n${YELLOW}Hey. Don't look at me. ${WHITE}I don't know what it means.\n${YELLOW}Try Googling error ${ULINE}$ERRNUM ${RESET}${YELLOW}and see if that helps?${RESET}\n"
-        exit $ERRNUM
+        echo -e "\n${RED}Fatal error ${WHITE}$ERRNUM ${RED}occurred installing WINE.\n${RESET}"
+        exit "$ERRNUM"
     fi
 fi
 
@@ -662,7 +672,7 @@ cd "\$(dirname "\$(readlink -f "\$0")")" || exit; [ "\$EUID" = "0" ] && echo -e 
 # Make sure WINE is configured (although, I'm assuming it was done by the original installer script)
 export WINE="\$(command -v wine)"
 export WINEPREFIX="$WINEPREFIX"
-export WINEDLLOVERRIDES="$DLL_OVERRIDES"
+export WINEDLLOVERRIDES="${DLL_OVERRIDES}${NVAPI}"
 export WINE_LARGE_ADDRESS_AWARE=1
 #export RESTORE_RESOLUTION=1
 #export WINE_D3D_CONFIG="renderer=vulkan"
@@ -760,16 +770,16 @@ chmod a+x "$GSS"
 echo -e "\n"
 cat "$GSS"
 read -r -p $'\nThis is '"${YELLOW}${GSS}${WHITE}"'. Please review and press '"${YELLOW}"'<ENTER>'"${WHITE}"' to continue.' donext
-echo -e "\n${WHITE}\"${YELLOW}$GSS${WHITE}\" has been written and made executable.\n\nIf you aren't running an nVidia GPU, you should change this:"
-echo -e "        ${YELLOW}export WINEDLLOVERRIDES=\"winemenubuilder.exe=d;mshtml=d;nvapi,nvapi64=n;dxgi=n\""
+echo -e "\n${WHITE}\"${YELLOW}$GSS${WHITE}\" has been written and made executable.\n\nIf you are running an nVidia GPU, you could change this:"
+echo -e "        ${YELLOW}export WINEDLLOVERRIDES=\"$DLL_OVERRIDES\""
 echo -e "${WHITE}to this:"
-echo -e "        ${YELLOW}export WINEDLLOVERRIDES=\"winemenubuilder.exe=d;mshtml=d\"${WHITE}"
-echo -e "It probably won't cause any problems for non-nVidia GPUs, but it's best just to be safe."
+echo -e "        ${YELLOW}export WINEDLLOVERRIDES=\"${DLL_OVERRIDES}${NVAPI}\"${WHITE}"
+echo -e "It probably won't cause any problems for non-nVidia GPUs if it's enabled, but leave it off unless you know your card supports it."
 echo -e "The full path of your ${YELLOW}$ONE ${WHITE}wineprefix is: \"${YELLOW}$WINEPREFIX${WHITE}\""
 echo -e "Be sure to verify that the game executable(s) written to \"${YELLOW}$GSS${WHITE}\" as:${YELLOW}\n"
 for i in "${!SELECTED_EXES[@]}"; do
     echo -e "    $((i+1)): ${SELECTED_EXES[$i]}"
-    #echo -e "    $((i+1)): ${GRAB_EXE[$i]}"
+    #echo -e "    $((i)): ${GRAB_EXE[$i]}"
 done
 echo -e "\n${WHITE}and modify if necessary.${RESET}\n"
 if [ "$DBG" = "true" ]; then
