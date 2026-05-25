@@ -58,7 +58,9 @@ grab_exe_list() {
     local -n _result=$2  # use nameref to return result in array
     local -n _chosen=$3  # use nameref to return selected value
     # shellcheck disable=SC2207
-    _result=($(find "$search_dir" -type f -iname "*.exe"))
+    mapfile -d '' -t _result < <(
+        find "$search_dir" -type f -iname "*.exe" -print0
+    )
     if [ "${#_result[@]}" -eq 0 ]; then
         echo -e "\n${RED}No .exe files found in ${YELLOW}\"$search_dir\"${WHITE}\n"
         return 1
@@ -234,7 +236,7 @@ detect_pkgmgr() {
     return 1
 }
 
-IFS=$'\n'
+#IFS=$'\n'
 
 # Define some fancy colourful text with BASH's built-in escape codes. Example:
 # echo -e "${BOLD}${YELLOW}This text will be displayed in BOLD YELLOW. ${RESET}While this text is normal."
@@ -682,7 +684,6 @@ export PRIMARY_DISPLAY=\${PRIMARY_DISPLAY:-0}
 export STAGING_RT_PRIORITY_SERVER=99
 export STAGING_WRITECOPY=1
 export STAGING_SHARED_MEMORY=1
-
 EOL
 
 if [[ $SKIP_VULKAN = false ]]; then cat << EOL >> "${GSS}"
