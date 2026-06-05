@@ -746,9 +746,21 @@ vulkan-dl() { echo -e "Using external vulkan translation (dxvk,vkd3d,dxvk-nvapi)
 [[ ! -f "\$VLKLOG" && -z "\$(status-vulkan)" ]] && vulkan-dl;
 [[ -f "\$VLKLOG" && -n "\$VLKVER" && "\$VLKVER" != "\$(awk '{print \$1}' "\$VLKLOG")" ]] && { rm -f vulkan.tar.xz || true; } && vulkan-dl
 
-# Detect primary display (auto handles multi-monitor)
-PRIMARY_DISPLAY=\$(xrandr --query | awk '/ primary/{print \$1; exit}')
-# Start process in WINE with GameScope, if available
+# Detect primary display - tries Wayland-native first, falls back to xrandr for X11/XWayland
+# Note that error reporting for "command not found" is suppressed, as there isn't a standard Wayland tool installed with every Wayland-based distro
+if command -v kscreen-doctor &>/dev/null && [ "$XDG_SESSION_TYPE" = "wayland" ]; then
+    # KDE Wayland
+    PRIMARY_DISPLAY=$(kscreen-doctor -o 2>/dev/null | awk '/enabled/ && /primary/ {print $2; exit}')
+elif command -v wlr-randr &>/dev/null && [ "$XDG_SESSION_TYPE" = "wayland" ]; then
+    # wlroots-based compositors (Sway, Hyprland, etc.)
+    PRIMARY_DISPLAY=$(wlr-randr 2>/dev/null | awk '/^[^ ]/ {disp=$1} /primary/ {print disp; exit}')
+elif command -v xrandr &>/dev/null; then
+    # X11 or XWayland fallback
+    PRIMARY_DISPLAY=$(xrandr --query 2>/dev/null | awk '/ primary/ {print $1; exit}')
+fi
+
+# Final fallback if nothing worked
+PRIMARY_DISPLAY=${PRIMARY_DISPLAY:-0}# Start process in WINE with GameScope, if available
 EOL
 fi
 if [[ ${#SELECTED_EXES[@]} -eq 1 ]]; then
