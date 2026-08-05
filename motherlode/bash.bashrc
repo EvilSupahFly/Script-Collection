@@ -437,6 +437,85 @@ pyvenv() {
     source "$v_home/bin/activate"
     echo -e "${WHITE}Activated virtual environment '${YELLOW}${v_name}${WHITE}'. Type 'deactivate' to exit.${RESET}"
 }
+
+rmv_empty_dirs() {
+    local target="."
+    local dry_run=0
+    local verbose=0
+    local prompt=0
+    local one_fs=1   # <-- default ON
+    local -a excludes=()
+
+    # --- Argument parsing ---
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+            --dry-run|-n)
+                dry_run=1
+                ;;
+            --verbose|-v)
+                verbose=1
+                ;;
+            --prompt|-p)
+                prompt=1
+                verbose=1
+                ;;
+            --exclude|-e)
+                shift
+                excludes+=("$1")
+                ;;
+            --one-fs|-x)
+                one_fs=1
+                ;;
+            --no-one-fs)
+                one_fs=0
+                ;;
+            -*)
+                echo -e "${RED:-}Unknown option: $1${RESET:-}"
+                return 1
+                ;;
+            *)
+                target="$1"
+                ;;
+        esac
+        shift
+    done
+
+    # --- Validation ---
+    if [[ ! -d "$target" ]]; then
+        echo -e "${RED:-}Error: '$target' is not a directory${RESET:-}"
+        return 1
+    fi
+
+    # --- Build find command ---
+    local -a find_cmd
+    find_cmd=(find "$target")
+
+    (( one_fs )) && find_cmd+=(-xdev)
+
+    find_cmd+=(-depth)
+
+    # Exclusions
+    for ex in "${excludes[@]}"; do
+        find_cmd+=(-path "$ex" -prune -o)
+    done
+
+    find_cmd+=(-type d -empty)
+
+    # --- Execution modes ---
+    if (( dry_run )); then
+        "${find_cmd[@]}" -print
+        return 0
+    fi
+
+    if (( prompt )); then
+        "${find_cmd[@]}" -ok rmdir {} \;
+    elif (( verbose )); then
+        "${find_cmd[@]}" -print -delete
+    else
+        "${find_cmd[@]}" -delete
+    fi
+}
+
 alias fix-opera='sudo ~root/.scripts/fix-opera.sh' # Opera fix HTML5 media
 /usr/bin/neofetch
 /usr/games/fortune | /usr/games/cowsay -f dragon

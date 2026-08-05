@@ -1,43 +1,67 @@
-## BASH-based Installer Script For WINE - Preamble
-This Windows game installer was written in BASH and is designed (originally) to be run on Ubuntu and downstream Ubuntu-based systems (like Mint, for example). ~~At this point, it will fail if this is not the case, though changing that is on my to-do list.~~ Now uses package manager detection to install WINE if it isn't already.
-This installer assumes you have also downloaded the `.redist` folder and have saved your installer .EXE files in a correspondingly-named subfolder of the folder the script is being run from.
+# install.sh - A WINE Game Installer That Grew Up
 
-## Terms Definitions:
- - "script" - the actual BASH script that does all your heavy lifting
- - "installer" - the Windows-based executable file (frequently named "setup.exe") distributed by the game developers or distributor
+*(three years of scope creep, and I'm not sorry about it)*
 
-## Explanation and Disclaimer - Postamble
-The script is bound by some limitations at this point, and while it does offer explanations for what it's doing at each step along the way, it's not fool-proof and assumes a base level of experience and systemic understanding from its user. Also, since it was originally intended to work for games downloaded from GoG, and even ripped directly from physical media, it employs a basic assumed-naming convention for the sake of simplicity and usability in that the default location will always be `C:\Games\${SOURCE_FOLDER_NAME}\`. While "The Game 2" or "The Game - Game II" are both valid ways of naming the source folder since the script relies on the user to store the initial setup file(s) in a somewhat sensibly named location, this can usually be overridden by the installer's built-in "Advanced Options" (when available) should the convention employed by this script not be used as the default by the installer. If, for example, you saved "setup.exe" in folder "The Game 2", the script creates the folder `C:\Games\The Game 2\` but then you see that the installer wants to install your game to `C:\Games\The Game - Game II\`, so you pull up the advanced options and change the path accordingly.
+## What This Is
+
+This started three years ago as the dumbest possible way to install my GOG library under WINE - four error checks and a prayer, basically. Somewhere along the way it picked up colour output, automatic WINE installation, self-updating Vulkan/DXVK, GameScope integration, and enough error handling that at least *my* mistakes are documented. This README didn't keep pace - for a while it was just easier to paste in whatever `--help` said when the flags changed. That stops now.
+
+## What It Actually Does For You
+
+- **Installs WINE itself, if you don't have it.** Detects `apt`, `dnf`, `pacman`, or `zypper`, adds the WineHQ repo if it's missing, and installs it. No manual repo-wrangling required.
+- **Builds and manages your WINE prefix.** Pick win32 or win64 (win64 by default), point it at a custom path with `-p`, or let it default to `~/Games/<GAME_FOLDER>`.
+- **Handles the Microsoft plumbing.** MSVC redistributables, Mono, and Gecko are fetched and installed automatically - no digging through a game installer's submenus for DirectX and hoping for the best.
+- **Keeps Vulkan translation current.** Checks GitHub for the latest DXVK/VKD3D/DXVK-NVAPI release every run and grabs it if you're behind.
+- **Writes you a launcher when it's done.** One `.exe`? You get a clean starter script. Found a "boxed set" installer with multiple games bundled in (looking at you, Dishonored Collection)? You get a numbered menu instead.
+- **Wraps launches in GameScope automatically**, if it's installed - including auto-detecting your primary display, so multi-monitor setups don't need manual config.
+- **Won't let you run it as root.** It'll tell you so and exit rather than let you shoot yourself in the foot.
 
 ## Getting Started
-For launching, there are several options:
 
-    1. ./install.sh
-    2. ./install.sh skip
-    3. ./install.sh "Some Folder"
-    4. ./install.sh "Some Folder" skip
+```
+./install.sh "GAME_FOLDER" [options]
+```
 
-In the first instance, the script will read in a list of all the directories present under the one it's being run from. Useful if you can't remember where you saved the installer .EXE or if you just don't feel like typing more than the minimum required to make this work.
+| Flag | What It Does |
+|---|---|
+| `-h`, `--help` | Show help and quit, ignoring everything else. |
+| `"GAME_FOLDER"` | Folder containing the game's `.exe`. Omit it and the script lists your options interactively. Quote it, even without spaces. |
+| `-m`, `--skip-msvc` | Skip the MSVC redistributable install. |
+| `-v`, `--skip-vulkan` | Skip the Vulkan/DXVK check-and-update. |
+| `-p`, `--prefix "PREFIX"` | Use this WINE prefix instead of the default `~/Games/GAME_FOLDER`. Quote it. |
+| `-32`, `--win32` | Create a 32-bit prefix. |
+| `-64`, `--win64` | Create a 64-bit prefix (default). |
 
-In the second instance, using "skip" allows you to bypass the MSVC prompt.
+Wine prefixes can't be converted between 32- and 64-bit after the fact, so pick deliberately if you're overriding the default.
 
-The third instance skips the directory listing and just gives you a list of .EXE files in "Some Folder", prompting you to pick one.
+## Terminology
 
-The last option combines the second and third choices, skipping the directory listing, and skipping the MSVC prompt.
+- **script** - the BASH script doing the actual work.
+- **installer** - the Windows `.exe` (often `setup.exe`) that the game's publisher shipped.
 
-This script will also attempt to ascertain whether or not WINE is installed. If it can't find the official WINE respositories listed in your package manager sources, and WINE doesn't appear to be installed, the script will attempt to add the official repositories and install both WINE and WINETRICKS after acertaining what kind of system you're on. Initially, this only worked on APT-managed Ubuntu and derrivative systems, however, as of the November 24, 2024 update, the script now attempts to determine what package manager is being used rather than the core OS branding, and work with the discovered package manager to install WINE.
+## Folder Conventions (Read This Part)
 
-Assuming a WINE install can be verified, the script will create a WINEPREFIX and a "destination" folder for the game, and offer you the choice to skip installing the MSVC Redistributables from the `.redist` folder. If you say "no", the script will call WINE to sequentially run any .EXE files it finds. If you say "yes", it will move to the next step. Since this list is dynamic, new versions of the MSVC can be added as they are released without needing to change the installer script.
+Drop your installer `.exe` into a subfolder of wherever you're running the script from. The script assumes that subfolder's name *is* the game's install-folder name, and creates `C:\Games\<SOURCE_FOLDER_NAME>\` inside the WINE prefix to match.
 
-At this point, the script looks for any .EXE files in the source directory (either chosen from the menu or supplied on the command-line), present a list, ask you to pick one, then call WINE to run it.
+MSVC redistributables are handled separately, from a `.redist` folder at the top level, alongside `install.sh` itself (included in this [repo](./.redist) for convenience). You won't need this for every game - most installers already bundle their own redists - but it's there to cover the ones that don't.
 
-Next, we install the newest release of Vulkan from [JC141's Vulkan repository](https://github.com/jc141x/vulkan) to replace the default DirectX, and once the initial "setup" completes in WINE, the script looks for any .EXE files in the "destination" folder, once again presenting a user-selectable list.
+That works fine as long as the installer agrees with you about naming. Sometimes it doesn't - say you named your folder "The Game 2" but the installer defaults to "The Game - Game II". When that happens, the installer's own "Advanced Options" almost always let you override the destination path to match. The script isn't psychic; it's just consistent.
 
-With the final .EXE selected, this script writes a runner script for the chosen game which defines the WINEPREFIX and game install location, and the name of the game's primary .EXE, makes it executable, and reports all this to the user.
+## Boxed Sets / Multi-Game Installers
 
-## The update.sh Update
+Some installers install more than one game at once. If the script finds more than one `.exe` after install, it builds a menu instead of a single launcher:
 
-Now included is an update script - [`update.sh`](https://github.com/EvilSupahFly/Script-Collection/blob/main/WINE-Game-Install-Script-for-Linux/update.sh). Many games release patches and updates in the form of .EXE files. Provided these files are stored in the "Updates" folder - a subfolder residing in the same folder as the script - the update script will simply process all .EXE files in the folder, asking you to RUN, SKIP or EXIT for each entry in the array. You probably don't want to keep too many updates in here though.
-If you choose RUN, it will launch the patch file using WINE. Once completed, it will move to the next file and the loop starts over.
-If you choose SKIP, it will move to the next file without calling WINE and the loop starts over.
-If you EXIT, it quits the script with exit code 0 without running WINE or calling up the next list entry.
+```
+Select a game to launch:
+1) Dishonored
+2) Dishonored 2
+3) Dishonored: Death of the Outsider
+```
+
+The menu labels are just `echo` lines - rename them to something friendlier any time. Leave the `do_gameScope` wrapper calls alone unless you know exactly what you're changing. And if you *DO* change something, *PLEASE* make a backup first!
+
+## Known Quirks
+
+- The naming convention above is a convenience, not magic - mismatches happen, and you fix them via Advanced Options.
+- Windows-side installer failures (bad exit codes from the actual `.exe`) aren't something the script can diagnose for you. It'll report the error code and get out of your way.
+- This assumes a baseline comfort with WINE, prefixes, and reading error messages. It explains itself as it goes, but it isn't going to teach you what a WINE prefix *is* from scratch.

@@ -48,7 +48,13 @@ showHelp() {
     echo -e "${YELLOW}    -p {PREFIX} or --prefix \"{PREFIX}\""
     echo -e "${WHITE}        Optional: Create or use the WINE prefix \"{PREFIX}\""
     echo -e "        Default Prefix is ${YELLOW}/home/$(whoami)/Games/GAME_FOLDER ${WHITE}unless changed with ${GREEN}-p${WHITE} or ${GREEN}--prefix${WHITE}."
-    echo -e "        Here as well, you should enclose the path in double quotes even if it doesn't contain spaces.\n${RESET}"
+    echo -e "        Here as well, you should enclose the path in double quotes even if it doesn't contain spaces."
+    echo -e "${YELLOW}    -32 ${WHITE}or ${YELLOW}--win32"
+    echo -e "${WHITE}        Optional: Create a 32-bit WINE prefix"
+    echo -e "${YELLOW}    -64 ${WHITE}or ${YELLOW}--win64"
+    echo -e "${WHITE}        Optional: Create a 64-bit WINE prefix"
+    echo -e "        Default prefix creation uses ${YELLOW}win64 ${WHITE}unless changed with ${GREEN}-32${WHITE} or ${GREEN}--win32${WHITE}."
+    echo -e "${RED}        Note that Wine prefixes ${WHITE}cannot be converted ${RED}between win32 and win64.\n${RESET}"
 }
 
 # Function: grab_exe_list
@@ -58,7 +64,9 @@ grab_exe_list() {
     local -n _result=$2  # use nameref to return result in array
     local -n _chosen=$3  # use nameref to return selected value
     # shellcheck disable=SC2207
-    _result=($(find "$search_dir" -type f -iname "*.exe"))
+    mapfile -d '' -t _result < <(
+        find "$search_dir" -type f -iname "*.exe" -print0
+    )
     if [ "${#_result[@]}" -eq 0 ]; then
         echo -e "\n${RED}No .exe files found in ${YELLOW}\"$search_dir\"${WHITE}\n"
         return 1
@@ -77,23 +85,21 @@ grab_exe_list() {
         IFS= read -r -p "Select an .exe file: " user_sel
         if [[ "$user_sel" =~ ^[0-9]+$ && "$user_sel" -lt "${#_result[@]}" ]]; then
             # shellcheck disable=SC2207
-            #_chosen="$(basename "${_result[$user_sel]}")"
             _chosen="${_result[$user_sel]}"
             return 0
         else
             echo -e "\n${YELLOW}\"$user_sel\" ${RED}is not a valid choice.${WHITE}\n"
         fi
     done
-    return 0
 }
 
 # Function: install_msvc_redist
 # Purpose: Installs MSVC redist packages from $RSRC, unless skipped
 install_msvc_redist() {
-    #set -x
     # shellcheck disable=SC2164
+    local ARCH
     local OLD_PREFIX="$WINEPREFIX"
-    local WINEPREFIX="$(readlink -f $WINEPREFIX)"
+    local WINEPREFIX="$(readlink -f "$WINEPREFIX")"
     local DEST="$WINEPREFIX/drive_c/_redist"
 
     echo -e "Installing MSVC redistributables into $WINEPREFIX..."
@@ -104,6 +110,8 @@ install_msvc_redist() {
         return 1
     fi
 
+    ARCH=$(grep '#arch=' "$WINEPREFIX/system.reg" | cut -d= -f2)
+
     # Copy redistributables if not already there (idempotent)
     if [ ! -d "$DEST" ]; then
         echo -e "Copying redistributables to $DEST..."
@@ -113,17 +121,6 @@ install_msvc_redist() {
         echo -e "Redistributables already present in $DEST, skipping copy."
     fi
 
-    # Install both redistributables
-    #for msvc in "$DEST"/*.exe; do
-    #    [ -e "$msvc" ] || continue
-    #    echo -e "Launching $(basename "$msvc") via Wine..."
-    #    (cd "$DEST" && wine start /wait "$(basename "$msvc")")
-    #    local ret=$?
-    #    echo -e "Result code: $ret\n"
-    #    if [ "$ret" -ne 0 ]; then
-    #        echo "Warning: Installer for $(basename "$msvc") failed with code $ret."
-    #    fi
-    #done
     # Install x86 first
     for msvc in "$DEST"/*x86*.exe; do
         [ -e "$msvc" ] || continue
@@ -133,17 +130,17 @@ install_msvc_redist() {
         echo "Result code: $ret"
     done
 
-    # Install x64 second
-    for msvc in "$DEST"/*x64*.exe; do
-        [ -e "$msvc" ] || continue
-        echo "Launching $(basename "$msvc") via Wine..."
-        (cd "$DEST" && wine start /wait "$(basename "$msvc")")
-        local ret=$?
-        echo "Result code: $ret"
-    done
-
+    # Install x64 second, if prefix is x64
+    if [ "$ARCH" = "win64" ]; then
+        for msvc in "$DEST"/*x64*.exe; do
+            [ -e "$msvc" ] || continue
+            echo "Launching $(basename "$msvc") via Wine..."
+            (cd "$DEST" && wine start /wait "$(basename "$msvc")")
+            local ret=$?
+            echo "Result code: $ret"
+        done
+    fi
     echo "MSVC installation phase complete."
-    #set +x
 }
 
 # Function: install_vulkan
@@ -234,8 +231,6 @@ detect_pkgmgr() {
     return 1
 }
 
-IFS=$'\n'
-
 # Define some fancy colourful text with BASH's built-in escape codes. Example:
 # echo -e "${BOLD}${YELLOW}This text will be displayed in BOLD YELLOW. ${RESET}While this text is normal."
 ULINE=$'\e[4m'
@@ -251,13 +246,14 @@ RESET=$'\e[0m'
 FORCE_RUN=false
 SKIP_VULKAN=false
 SKIP_MSVC=false
-POSITIONAL=()
 LAUNCHER=""
 CUSTOM_PREFIX=""
+WINEARCH_MODE=""
 EXE=""
 DBG=""
 DLL_OVERRIDES="winemenubuilder.exe=d"
 NVAPI=";nvapi,nvapi64=n"
+
 #DLL_OVERRIDES="winemenubuilder.exe=d;mshtml=d;dxgi=n;mscoree,=d;nvapi,nvapi64=n" # Set environment variables for WINE
 # -----------------------------
 # Parse flags
@@ -277,14 +273,16 @@ while [[ $# -gt 0 ]]; do
             SKIP_VULKAN=true; shift;;
         -d|--debug)
             DBG=true; WINEDEBUG="-all"; shift;;
-        #-p|--prefix)
-        #    CUSTOM_PREFIX="$2"; shift 2;;
         -p|--prefix)
             if [[ -n "$2" && "$2" == /* ]]; then
                 CUSTOM_PREFIX="$2"; shift 2;
             else
                 shift 1
             fi;;
+        -32|--win32)
+            WINEARCH_MODE="win32"; shift;;
+        -64|--win64)
+            WINEARCH_MODE="win64"; shift;;
         -*|--*)
             echo "Warning: Ignoring unknown option '$1'" >&2; shift;;
         *)
@@ -304,7 +302,7 @@ echo -e "${WHITE}" # Make the text bold and white by default because it's easier
 # User ID, working directory and parameter checks - NO ROOT!!!
 cd "$(dirname "$(readlink -f "$0")")" || exit; [ "$EUID" = "0" ] && echo -e "${RED}Gotta quit here because I can't run as root. ${WHITE}I'll prompt you if I need root access.${RESET}" && exit 255
 
-# Check if a foler was supplied on the command line and deal with any trailing slashes, should they exist
+# Check if a folder was supplied on the command line and deal with any trailing slashes, should they exist
 if [[ -z "$1" ]]; then
     # Load all subfolders into an array and make it a numbered list
     #GDIRS=($(find . -maxdepth 1 -type d -exec basename {} \; | grep -vE '^\.$|^\..$|\_redist$'))
@@ -374,15 +372,14 @@ echo -e "error. Everything is mostly automated, only requiring you to answer a f
 # shellcheck disable=SC2162
 read -r -p $'\nTo continue, press '"${YELLOW}"'<ENTER>'"${WHITE}"'. To cancel, press '"${YELLOW}"'<CTRL-C>'"${WHITE}"'. ' donext
 
-# Create Wineprefix if it doesn't exist
-if [ ! -z "$CUSTOM_PREFIX" ]; then
-    WINEPREFIX="$(readlink -f $CUSTOM_PREFIX)"
-    echo -e "${GREEN}Using custom prefix ${WHITE}${WINEPREFIX}${RESET}"
+if [ -n "$CUSTOM_PREFIX" ]; then
+    WINEPREFIX="$(readlink -f "$CUSTOM_PREFIX")"
 else
     #WINEPREFIX="/home/$(whoami)/Game_Storage"
-    WINEPREFIX="$(readlink -f /home/$(whoami)/Games/$NOSPACE)"
-    echo -e "${GREEN}Using default prefix ${WHITE}${WINEPREFIX}${RESET}"
+    WINEPREFIX="$(readlink -f "/home/$(whoami)/Games/$NOSPACE")"
 fi
+
+echo -e "${GREEN}Using prefix ${WHITE}${WINEPREFIX}${RESET}"
 
 # If WINE check fails, determine package manager.
 # Next, check if WINE repo is already added. If not, add it.
@@ -420,20 +417,20 @@ case "$PMGR" in
         PM_INSTALL='sudo zypper install -y'
         ;;
     *)
-        return 1
+        exit 1
         ;;
 esac
 
 if ! command -v wine >/dev/null 2>&1; then
     echo -e "\n${RED}WINE isn't installed. ${WHITE}Attempting to install...\n"
 
-    if ! eval "$REPO_CHECK"; then
-        eval "$REPO_ADD"
+    if ! eval "$PM_REPO_CHECK"; then
+        eval "$PM_REPO_ADD"
     fi
 
-    eval "$UPDATE_CMD"
+    eval "$PM_UPDATE"
 
-    if ! eval "$INSTALL_CMD"; then
+    if ! eval "$PM_INSTALL"; then
         ERRNUM=$?
         echo -e "\n${RED}Fatal error ${WHITE}$ERRNUM ${RED}occurred installing WINE.\n${RESET}"
         exit "$ERRNUM"
@@ -448,17 +445,18 @@ if [ "$DBG" = "true" ]; then
 else
     WINE="$(command -v wine)"
 fi
+
 WINEVER="$(wine --version)" # Get the WINE version number
 WINE_LARGE_ADDRESS_AWARE=1
 STAGING_RT_PRIORITY_SERVER=99
-WINEDLLOVERRIDES="$DLL_OVERIDES"
+WINEDLLOVERRIDES="$DLL_OVERRIDES"
 STAGING_WRITECOPY=1
 STAGING_SHARED_MEMORY=1
-#export WINE_D3D_CONFIG="renderer=vulkan"
+#WINEARCH="$WINEARCH_MODE"
 G_SRC="$PWD/$ONE" # Game Source Folder (where the setup is)
 GAMEDEST="$WINEPREFIX/drive_c/Games/$ONE" # Game Destination Folder (where it's going to be)
 GSS="$WINEPREFIX/drive_c/${NOSPACE}.sh" # Game Starter Script - written automatically by this script
-RSRC="$(readlink -f $PWD/_redist)" # Location of the MSVC Redistributables
+RSRC="$(readlink -f "$PWD/.redist")" # Location of the MSVC Redistributables
 
 export WINE
 export WINEVER
@@ -466,10 +464,9 @@ export WINE_LARGE_ADDRESS_AWARE
 export WINEDLLOVERRIDES
 export WINEPREFIX
 export STAGING_RT_PRIORITY_SERVER
-export WINEDLLOVERRIDES
 export STAGING_WRITECOPY
 export STAGING_SHARED_MEMORY
-#export WINE_D3D_CONFIG
+#export WINEARCH
 export G_SRC
 export GAMEDEST
 export GSS
@@ -477,37 +474,100 @@ export RSRC
 
 echo -e "\n${GREEN}WINE version ${YELLOW}$WINEVER${GREEN} is installed."
 
-# Check to see if $G_SRC actually exists. If not, exit with an error (useful check if user gives $1)
-if [ ! -d "$G_SRC" ]; then
-    echo -e "${RED}Error: \"${WHITE}$G_SRC${RED}\" doesn't exist.\n ლ(ಠ益ಠ)ლ \n${RESET}"
-    exit 255
-fi
+# Create Wineprefix if it doesn't exist
+if [[ ! -f "$WINEPREFIX/system.reg" ]]; then
 
-# Check to see if $G_SRC contains files. If not, exit with an error (also useful check if user gives $1)
-if [ -z "$G_SRC" ]; then
-    echo -e "${RED}Error: \"$G_SRC\" is an empty directory.${WHITE}\n ಠ_ಠ \n${RESET}"
-    exit 255
-fi
+    # No architecture specified?
+    if [[ -z "$WINEARCH_MODE" ]]; then
 
-if [ ! -d "$WINEPREFIX/drive_c" ]; then
-    echo -e "${WHITE}Initializing new WINE prefix at ${YELLOW}$WINEPREFIX${WHITE}..."
-    "$WINE" wineboot -u # >/dev/null 2>&1
+        # Default prefix behavior
+        if [[ -z "$CUSTOM_PREFIX" ]]; then
+            WINEARCH_MODE="win64"
+
+        # Custom prefix behavior
+        else
+            echo
+            echo "Custom prefix specified:"
+            echo "  $WINEPREFIX"
+            echo
+            echo "Select Wine architecture:"
+            echo "  1) win64 (recommended/default)"
+            echo "  2) win32"
+            echo
+
+            while true; do
+                read -rp "Choice: " archsel
+
+                case "$archsel" in
+                    1)
+                        WINEARCH_MODE="win64"
+                        break
+                        ;;
+                    2)
+                        WINEARCH_MODE="win32"
+                        break
+                        ;;
+                    *)
+                        echo "Invalid selection."
+                        ;;
+                esac
+            done
+        fi
+    fi
+
+    export WINEARCH="$WINEARCH_MODE"
+
+    echo -e "\n${GREEN}Initializing new $WINEARCH WINE prefix at:"
+    echo -e "  ${WHITE}$WINEPREFIX\n${RESET}"
+
+    "$WINE" wineboot -u || {
+        ERR=$?
+        echo -e "${RED}Error: Wine prefix initialization failed with error $ERR.\n${RESET}"
+        exit $ERR
+    }
+    unset WINEARCH
+
+    CREATED_ARCH=$(grep '#arch=' "$WINEPREFIX/system.reg" | cut -d= -f2)
+
+    if [[ "$CREATED_ARCH" != "$WINEARCH_MODE" ]]; then
+        echo -e "${RED}ERROR: Architecture Mismatch"
+        echo -e "  ${RED}Requested architecture: ${WHITE}$WINEARCH_MODE"
+        echo -e "  ${RED}Created architecture:   ${WHITE}$CREATED_ARCH\n${RESET}"
+        exit 1
+    fi
+else
+    # Existing prefix detected
+    EXISTING_ARCH=$(grep '#arch=' "$WINEPREFIX/system.reg" | cut -d= -f2)
+
+    echo -e "\n${WHITE}Existing Wine prefix detected:"
+    echo -e "  Prefix: ${YELLOW}$WINEPREFIX${WHITE}"
+    echo -e "  Arch:   ${YELLOW}$EXISTING_ARCH\n${RESET}"
+
+    # User explicitly requested an architecture?
+    if [[ -n "$WINEARCH_MODE" && "$WINEARCH_MODE" != "$EXISTING_ARCH" ]]; then
+        echo -e "${RED}ERROR:"
+        echo -e "  ${WHITE}Requested architecture: ${RED}$WINEARCH_MODE"
+        echo -e "  ${WHITE}Existing architecture:  ${RED}$EXISTING_ARCH\n"
+        echo -e "${WHITE}Wine prefixes cannot be converted between win32 and win64.\n${RESET}"
+        exit 1
+    fi
 fi
 
 # Install or update MONO and GECKO
 do_mono_gecko
 
-# MSVC redistributables  / Vulkan - if "skip" was given, don't ask about installing them.
-# Otherwise, ask and act accordingly.
+# MSVC redistributables / Vulkan - if "skip" was given, don't ask about installing them.
+# Otherwise, ask and act accordingly unless `--force` was mandated to override the user.
 if [ "$FORCE_RUN" = true ]; then
     install_vulkan
     install_msvc_redist
-fi
-if [ "$SKIP_MSVC" = false ]; then
-    install_msvc_redist
-fi
-if [ "$SKIP_VULKAN" = false ]; then
-    install_vulkan
+else
+    if [ "$SKIP_MSVC" = false ]; then
+        install_msvc_redist
+    fi
+    if [ "$SKIP_VULKAN" = false ]; then
+        install_vulkan
+    fi
 fi
 
 # Create an array containing all the .exe files.
@@ -520,27 +580,25 @@ SETUPEXE=$(basename "$EXE")
 # If $GAMEDEST doesn't exist, create it
 [ ! -d "$GAMEDEST" ] && mkdir -p "$GAMEDEST"
 
-#if [ "$DBG" = "true" ]; then
-    # Print variables, their contents, and an explanatory note for verification.
-    echo -e "\n${WHITE}Technical details, if you care (debug mode active):"
-    echo -e "\n${GREEN}    \$GSS=\"$GSS\""
-    echo -e "    \$G_SRC=\"$G_SRC\""
-    echo -e "    \$WINEPREFIX=\"$WINEPREFIX\""
-    echo -e "    \$GAMEDEST=\"$GAMEDEST\""
-    echo -e "    \$SETUPEXE=\"$SETUPEXE\""
-    echo -e "${WHITE}\n  I  ${YELLOW}${ULINE}***STRONGLY***${RESET}${WHITE}  recommend picking the folder \"${ULINE}${YELLOW}$GAMEDEST${RESET}${WHITE}\""
-    echo -e "  when the installer launches. For the sake of automation, this installer script creates the directory using"
-    echo -e "  the placeholder \"${YELLOW}\$GAMEDEST${WHITE}\", and that's where the launcher script will expect it to be."
-    echo -e "\n  If the installer doesn't default to \"${YELLOW}C:\Games\\${1}${WHITE}\" you can change it using the advanced options."
-    echo -e "\n  Also, you don't need to install DirectX or the MSVC Redistributables from the installer menu."
-    echo -e "  Vulkan replaces DirectX, and the MSVC Redistributables can be (re)installed any time by running this script again."
-    echo -e "  This install scripthandles all that, as you have no doubt already noticed."
-    echo -e "\n  If you let the game's installer use a different folder, you will have to manually change the path and possibly the"
-    echo -e "  filename for the game's primary ${YELLOW}.exe ${WHITE}in the ${YELLOW}$GSS ${WHITE}script to match."
-    echo -e "\n  If you do modify the launcher script, remember that paths and files are ${RED}Case Sensitive${WHITE} on Linux."
-    # shellcheck disable=SC2034
-    read -r -p $'\nTo continue, press '"${YELLOW}"'<ENTER>'"${WHITE}"'. To cancel, press '"${YELLOW}"'<CTRL-C>'"${WHITE}"'. ' donext
-#fi
+# Print variables, their contents, and an explanatory note for verification.
+echo -e "\n${WHITE}Technical details, if you care:"
+echo -e "\n${GREEN}    \$GSS=\"$GSS\""
+echo -e "    \$G_SRC=\"$G_SRC\""
+echo -e "    \$WINEPREFIX=\"$WINEPREFIX\""
+echo -e "    \$GAMEDEST=\"$GAMEDEST\""
+echo -e "    \$SETUPEXE=\"$SETUPEXE\""
+echo -e "${WHITE}\n  I  ${YELLOW}${ULINE}***STRONGLY***${RESET}${WHITE}  recommend picking the folder \"${ULINE}${YELLOW}$GAMEDEST${RESET}${WHITE}\""
+echo -e "  when the installer launches. For the sake of automation, this installer script creates the directory using"
+echo -e "  the placeholder \"${YELLOW}\$GAMEDEST${WHITE}\", and that's where the launcher script will expect it to be."
+echo -e "\n  If the installer doesn't default to \"${YELLOW}C:\Games\\${1}${WHITE}\" you can change it using the advanced options."
+echo -e "\n  Also, you don't need to install DirectX or the MSVC Redistributables from the installer menu."
+echo -e "  Vulkan replaces DirectX, and the MSVC Redistributables can be (re)installed any time by running this script again."
+echo -e "  This install scripthandles all that, as you have no doubt already noticed."
+echo -e "\n  If you let the game's installer use a different folder, you will have to manually change the path and possibly the"
+echo -e "  filename for the game's primary ${YELLOW}.exe ${WHITE}in the ${YELLOW}$GSS ${WHITE}script to match."
+echo -e "\n  If you do modify the launcher script, remember that paths and files are ${RED}Case Sensitive${WHITE} on Linux."
+# shellcheck disable=SC2034
+read -r -p $'\nTo continue, press '"${YELLOW}"'<ENTER>'"${WHITE}"'. To cancel, press '"${YELLOW}"'<CTRL-C>'"${WHITE}"'. ' donext
 
 # Enables some nVidia-specific functionality, offering entry points for supporting the following features in applications:
 # - NVIDIA DLSS for Vulkan, by supporting the relevant adapter information by querying from Vulkan.
@@ -555,16 +613,16 @@ export DXVK_ENABLE_NVAPI=1
 # Start WINE and pass the primary installer .EXE to it.
 echo -e "\n${WHITE}Starting \"${YELLOW}${ONE}${WHITE}\" installer with $EXE..."
 # shellcheck disable=SC2164
-echo "RPATH=\"\$(readlink -f \"\$EXE\")\" -- RPATH="$(readlink -f "$EXE")""
+
+# Resolve any symlinks to their real filesystem paths before cd-ing into the installer directory
 RPATH="$(readlink -f "$EXE")" || {
     ERR="$?";
     echo -e "${RED}Failed to resolve symlinks for: $EXE (Error $ERR).${RESET}";
     exit $ERR;
 }
-echo "RPATH = $RPATH"
-echo "RDIR=\"\$(dirname \"\$RPATH\")\" -- RDIR="$(dirname "$RPATH")""
+
 RDIR="$(dirname "$RPATH")"
-echo "RDIR = $RDIR"
+
 cd "$RDIR" || {
     ERR="$?";
     echo -e "${RED}Cannot enter directory: $RDIR (Error $ERR).${RESET}";
@@ -572,24 +630,14 @@ cd "$RDIR" || {
 }
 
 #Run WINE with an "If It Fails" assumption block.
-if [ "$DBG" = "true" ]; then
-    echo -e "\n\"$WINE\" \"$SETUPEXE\"\n"
-
-    if ! "$WINE" "$SETUPEXE"; then
-        # If it did fail, save the error number and exit with a message.
-        ERRNUM=$?
-        echo -e "\n${RED}Error code ${YELLOW}$ERRNUM ${RED}detected on exit.\n${WHITE}Looks like something went wrong.\nUnfortunately, since ${RED}$ERRNUM${WHITE} is a Windows-related error, I can't help you.\n${RESET}"
-        exit 255
-    fi
-else
-    echo -e "\n\"$WINE\" \"$SETUPEXE\"\n"
-    if ! "$WINE" "$SETUPEXE"; then
-        # If it did fail, save the error number and exit with a message.
-        ERRNUM=$?
-        echo -e "\n${RED}Error code ${YELLOW}$ERRNUM ${RED}detected on exit.\n${WHITE}Looks like something went wrong.\nUnfortunately, since ${RED}$ERRNUM${WHITE} is a Windows-related error, I can't help you.\n${RESET}"
-        exit 255
-    fi
+echo -e "\n\"$WINE\" \"$SETUPEXE\"\n"
+if ! "$WINE" "$SETUPEXE"; then
+    # If it did fail, save the error number and exit with a message.
+    ERRNUM=$?
+    echo -e "\n${RED}Error code ${YELLOW}$ERRNUM ${RED}detected on exit.\n${WHITE}Looks like something went wrong.\nUnfortunately, since ${RED}$ERRNUM${WHITE} is a Windows-related error, I can't help you.\n${RESET}"
+    exit 255
 fi
+
 # We used these once already so we're blanking them so we can use them again
 EXE=""
 GRAB_EXE=""
@@ -666,7 +714,7 @@ do_gameScope() {
     fi
 }
 
-# Change the current working directory to the one the scipt was run from
+# Change the current working directory to the one the script was run from
 cd "\$(dirname "\$(readlink -f "\$0")")" || exit; [ "\$EUID" = "0" ] && echo -e "Please don't run as root!" && exit
 
 # Make sure WINE is configured (although, I'm assuming it was done by the original installer script)
@@ -682,7 +730,6 @@ export PRIMARY_DISPLAY=\${PRIMARY_DISPLAY:-0}
 export STAGING_RT_PRIORITY_SERVER=99
 export STAGING_WRITECOPY=1
 export STAGING_SHARED_MEMORY=1
-
 EOL
 
 if [[ $SKIP_VULKAN = false ]]; then cat << EOL >> "${GSS}"
