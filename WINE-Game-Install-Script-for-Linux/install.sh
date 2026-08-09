@@ -100,7 +100,7 @@ install_msvc_redist() {
     local ARCH
     local OLD_PREFIX="$WINEPREFIX"
     local WINEPREFIX="$(readlink -f "$WINEPREFIX")"
-    local DEST="$WINEPREFIX/drive_c/_redist"
+    local DEST="$WINEPREFIX/drive_c/.redist"
 
     echo -e "Installing MSVC redistributables into $WINEPREFIX..."
 
@@ -305,11 +305,11 @@ cd "$(dirname "$(readlink -f "$0")")" || exit; [ "$EUID" = "0" ] && echo -e "${R
 # Check if a folder was supplied on the command line and deal with any trailing slashes, should they exist
 if [[ -z "$1" ]]; then
     # Load all subfolders into an array and make it a numbered list
-    #GDIRS=($(find . -maxdepth 1 -type d -exec basename {} \; | grep -vE '^\.$|^\..$|\_redist$'))
+    #GDIRS=($(find . -maxdepth 1 -type d -exec basename {} \; | grep -vE '^\.$|^\..$|\.redist$'))
     GDIRS=()
     echo -e "\n${RED}Commandline was blank. ${WHITE}Listing potential game folders:\n"
     for dir in */; do
-        if [[ $dir =~ ^\.[^.]|^\_redist ]]; then
+        if [[ $dir =~ ^\.[^.]|^\.redist ]]; then
             continue
         fi
         GDIRS+=("$dir")
