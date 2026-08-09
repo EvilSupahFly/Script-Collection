@@ -36,7 +36,7 @@ showHelp() {
     echo -e "${YELLOW}    -h or --help"
     echo -e "${WHITE}        Optional: Displays this help text and quits, ignoring all other options given."
     echo -e "${YELLOW}    \"GAME_FOLDER\""
-    echo -e "${WHITE}        Optional: local folder containing a game or app installer (must be s '.exe' file)."
+    echo -e "${WHITE}        Optional: local folder containing a game or app installer (must be an .exe file)."
     echo "        If this option is not specified, the installer will list all folders, requiring you to pick one."
     echo "        When specifying a folder, you should enclose it in double quotes, even if it doesn't contain spaces."
     echo -e "${YELLOW}    -m or --skip-msvc"
