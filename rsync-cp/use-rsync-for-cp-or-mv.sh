@@ -1,5 +1,17 @@
 #!/bin/bash
 
+# Define some fancy colourful text with BASH's built-in escape codes. Example:
+# echo -e "${BOLD}${YELLOW}This text will be displayed in BOLD YELLOW. ${RESET}While this text is normal."
+# Normally, this will go at the top of either /etc/bash.bashrc or $HOME/.bashrc
+BOLD='\033[1m'
+RESET='\e[0m' #Normal
+BGND='\e[40m'
+ULINE='\033[4m'
+YELLOW='${BOLD}\e[1;33m'
+RED='${BOLD}\e[1;91m'
+GREEN='${BOLD}\e[1;92m'
+WHITE='${BOLD}\e[1;97m'
+
 # Replace "cp" with "rsync"
 cp() {
     # One-time warning
