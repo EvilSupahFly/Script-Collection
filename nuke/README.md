@@ -38,7 +38,7 @@ Type NUKE to permanently delete these 3 item(s):
 
 ## Safety features
 
-`rm -Rfdv` is permanent, so the function is built to make you look before it runs, not after:
+`rm -Rfdv` is permanent, so the function is built to make you look **before** it runs, not **after**:
 
 - **Numbered preview** of every match, before anything is touched.
 - **`--dryrun`** prints the literal command - including `%q`-quoted paths, so what you see is exactly what would execute, spaces and all.
@@ -47,13 +47,13 @@ Type NUKE to permanently delete these 3 item(s):
 
 ## Requirements
 
-- Bash 4.4+ (uses `mapfile -d ''` for NUL-delimited paths, which handles filenames with spaces or newlines correctly)
-- GNU `find` and GNU `rm` (the `-d` flag in `rm -Rfdv` is a GNU extension; on macOS/BSD, install `coreutils` or adjust the flags accordingly)
-- Eight colour variables are defined - `RED`, `YELLOW`, `GREEN`, `WHITE`, `PURPLE`, `ULINE`, `BOLD`, `RESET` - for the list formatting. I've already defined them, but if you don't want to use them, set them to empty strings and the function still works fine uncoloured. 
+- Bash 3.x+ (uses `read -r -d ''` for NUL-delimited paths, which handles filenames with spaces or newlines correctly - this works on much older bash than `mapfile -d ''` does, which needs 4.4+)
+- GNU `find` and GNU `rm` (the `-d` flag in `rm -Rfdv` is a GNU extension; on macOS/BSD, install coreutils or adjust the flags)
+- Six color variables - `RED`, `YELLOW`, `GREEN`, `WHITE`, `ULINE`, `RESET` - for the list formatting. If you're dropping this into a fresh shell without them already defined, either source them from elsewhere in your collection or set them to empty strings; the function works fine uncolored.
 
 ## Installation
 
-Clone the repo and source the script, or drop the function into your `.bashrc` / `.bash_aliases` / `/etc/bash.bashrc`:
+Clone the repo and source the script, or drop the function into your `.bashrc` / `.bash_aliases`:
 
 ```bash
 source nuke.sh
