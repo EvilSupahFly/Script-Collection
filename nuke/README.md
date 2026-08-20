@@ -58,7 +58,3 @@ Clone the repo and source the script, or drop the function into your `.bashrc` /
 ```bash
 source nuke.sh
 ```
-
-## License
-
-<!-- Add your license of choice here -->
