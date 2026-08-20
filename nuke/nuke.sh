@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # Define some fancy colourful text with BASH's built-in escape codes. Example:
 # echo -e "${BOLD}${YELLOW}This text will be displayed in BOLD YELLOW. ${RESET}While this text is normal."
@@ -21,8 +21,8 @@ PURPLE="\033[35m" # Magenta (Purple)
 #   nuke <search_dir> <pattern> [--dryrun]
 #
 # Examples:
-#   nuke "/home/evilsupahfly/Phone_Backups" ".trashed-*" --dryrun
-#   nuke "/home/evilsupahfly/Phone_Backups" ".trashed-*"
+#   nuke "/data/evilsupahfly" ".trashed-*" --dryrun
+#   nuke "/data/evilsupahfly" ".trashed-*"
 #
 # Note: no -type restriction on find, so this matches files AND folders,
 # same as the -iname "*trash*" search that inspired it.
@@ -45,11 +45,15 @@ nuke() {
         return 1
     fi
 
-    local -a targets
-    # shellcheck disable=SC2207
-    mapfile -d '' -t targets < <(
-        find "$search_dir" -iname "$pattern" -print0
-    )
+    # NUL-delimited read via `read -d ''` instead of `mapfile -d ''` --
+    # mapfile's custom delimiter is bash 4.4+ only, and older platforms
+    # (NAS firmware, older distros) are often still on 4.3 or earlier.
+    # `read -d ''` has worked the same way since early bash 3.x.
+    local -a targets=()
+    local item
+    while IFS= read -r -d '' item; do
+        targets+=("$item")
+    done < <(find "$search_dir" -iname "$pattern" -print0)
 
     if [ "${#targets[@]}" -eq 0 ]; then
         echo -e "\n${RED}Nothing matching ${YELLOW}\"$pattern\"${RED} found in ${YELLOW}\"$search_dir\"${WHITE}\n"
@@ -76,8 +80,9 @@ nuke() {
         return 0
     fi
 
-    # rm -Rf is permanent, so a plain y/n is too easy to blow through on
-    # autopilot -- require the literal word as a deliberate second action.
+    # rm -Rfdv is permanent, so a plain y/n is too easy to blow through on
+    # autopilot. Require the literal word as a deliberate second action.
+    # Check is case sensitive - only NUKE (all caps) counts.
     local confirm
     read -r -p "Type NUKE to permanently delete these ${#targets[@]} item(s): " confirm
     if [[ "$confirm" != "NUKE" ]]; then
