@@ -49,11 +49,11 @@ Type NUKE to permanently delete these 3 item(s):
 
 - Bash 4.4+ (uses `mapfile -d ''` for NUL-delimited paths, which handles filenames with spaces or newlines correctly)
 - GNU `find` and GNU `rm` (the `-d` flag in `rm -Rfdv` is a GNU extension; on macOS/BSD, install `coreutils` or adjust the flags accordingly)
-- Six colour variables - `RED`, `YELLOW`, `GREEN`, `WHITE`, `ULINE`, `RESET` - for the list formatting. If you're dropping this into a fresh shell without them already defined, either source them from elsewhere in your collection or set them to empty strings; the function works fine uncoloured.
+- Eight colour variables are defined - `RED`, `YELLOW`, `GREEN`, `WHITE`, `PURPLE`, `ULINE`, `BOLD`, `RESET` - for the list formatting. I've already defined them, but if you don't want to use them, set them to empty strings and the function still works fine uncoloured. 
 
 ## Installation
 
-Clone the repo and source the script, or drop the function into your `.bashrc` / `.bash_aliases`:
+Clone the repo and source the script, or drop the function into your `.bashrc` / `.bash_aliases` / `/etc/bash.bashrc`:
 
 ```bash
 source nuke.sh
