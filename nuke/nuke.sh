@@ -71,18 +71,31 @@ nuke() {
     echo
 
     if ((dryrun)); then
-        # Show the exact command rather than a paraphrase of it, so a copy/paste
-        # of the dryrun output is guaranteed to match what a real run would do.
+        # One path per line (like the preview list above), not one unbroken
+        # line. The 150-match wall of text I got when I tested on my NAS was
+        # unreadable and defeated the point of a dry run, which is to actually
+        # be able to check it. Trailing backslashes keep it a single valid
+        # command if copy-pasted.
         echo -e "${YELLOW}--dryrun set: nothing deleted. Command that would run:${WHITE}"
-        printf '%s' "rm -Rfdv --"
-        printf ' %q' "${targets[@]}"
-        echo -e "${WHITE}\n"
+        echo "rm -Rfdv -- \\"
+        local last_idx=$(( ${#targets[@]} - 1 ))
+        for ((i=0; i<${#targets[@]}; i++)); do
+            if ((i == last_idx)); then
+                printf '  %q\n' "${targets[$i]}"
+            else
+                printf '  %q \\\n' "${targets[$i]}"
+            fi
+        done
+        echo
         return 0
     fi
 
     # rm -Rfdv is permanent, so a plain y/n is too easy to blow through on
-    # autopilot. Require the literal word as a deliberate second action.
-    # Check is case sensitive - only NUKE (all caps) counts.
+    # autopilot -- require the literal word as a deliberate second action.
+    # Since we don't know how big the list will be, we don't want manual
+    # confirmation on every file and directory, and we prefer recursion
+    # so we only have to run once, and that's a safety risk when run blind.
+    # The solution is to run rm with -v for verbosity for visibility.
     local confirm
     read -r -p "Type NUKE to permanently delete these ${#targets[@]} item(s): " confirm
     if [[ "$confirm" != "NUKE" ]]; then
