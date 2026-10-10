@@ -14,17 +14,22 @@ To use the new script instead:
 - make the script executable
 - open a terminal in a folder with MP4 or M4A files and type one of the following:
 
-    `./mp4-to-mp3_v2.sh`
-    `./mp4-to-mp3_v2.sh "FILE"`
-    `./mp4-to-mp3_v2.sh --all`
-    `./mp4-to-mp3_v2.sh -a`
-    `./mp4-to-mp3_v2.sh --help`
-    `./mp4-to-mp3_v2.sh -h`
+    ```
+    ./mp4-to-mp3_v2.sh
+    ./mp4-to-mp3_v2.sh "FILE"
+    ./mp4-to-mp3_v2.sh --all
+    ./mp4-to-mp3_v2.sh -a
+    ./mp4-to-mp3_v2.sh --help
+    ./mp4-to-mp3_v2.sh -h
+    ```
 
-Usage: ./mp4-to-mp3_v2.sh [--all] [FILE]
+Usage instructions (same as passing `-h/--help`):
+```
+Usage: ./mp4-to-mp3_v2.sh [--all] ["FILE"]
   FILE       convert a single MP4/M4A file - use double quotes if there are spaces in the file name ("FILE NAME.mp3")
   -a, --all  convert every MP4/M4A in the current directory
   -h, --help show this help and exit
+```
 
 **How it behaves**
 - **Single file:** `mp4-to-mp3_v2.sh song.m4a` converts that file and exits.
