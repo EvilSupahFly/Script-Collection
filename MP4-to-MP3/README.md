@@ -9,6 +9,6 @@ To use this script:
 
 If errors are encountered, it will leave a message about the problem file and move on to the next (if available).
 
-Currently, this only runs on APT based distros, though I plan on updating this.
+Currently, this only runs on APT and YUM based distros, though I plan on updating this.
 
 ... Eventually.
