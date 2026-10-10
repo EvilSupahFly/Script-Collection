@@ -23,10 +23,13 @@ To use the new script instead:
     ./mp4-to-mp3_v2.sh -h
     ```
 
-Usage: ./mp4-to-mp3_v2.sh [--all] [FILE]
+Usage instructions (same as passing `-h/--help`):
+```
+Usage: ./mp4-to-mp3_v2.sh [--all] ["FILE"]
   FILE       convert a single MP4/M4A file - use double quotes if there are spaces in the file name ("FILE NAME.mp3")
   -a, --all  convert every MP4/M4A in the current directory
   -h, --help show this help and exit
+```
 
 **How it behaves**
 - **Single file:** `mp4-to-mp3_v2.sh song.m4a` converts that file and exits.
