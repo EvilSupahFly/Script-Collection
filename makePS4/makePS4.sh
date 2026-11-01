@@ -2,8 +2,10 @@
 # PS4 video helpers: makePS4, batchPS4, check_ps4_compatibility, check_ps4_batch
 # Source from ~/.bashrc (or `source makePS4.sh`). Needs bash 5.1+ (wait -n -p), ffmpeg, ffprobe.
 #
-# PASS FIRST: a file is only touched if it FAILS the check. A pass is a pass, whatever the container
-# (MP4 or MKV), and whatever flags/env vars are set; --force overrides.
+# PASS FIRST: a file is only converted if it FAILS the check. A pass is a pass, whatever the container
+# (MP4 or MKV), and whatever flags/env vars are set; --force overrides. The one thing done to a passing
+# file is a rename: it gets a -PS4 suffix (Movie.mkv -> Movie-PS4.mkv) so it's recognisable at a glance in
+# the PS4's file browser, and batchPS4 never re-checks it. Never overwrites; --no-rename / PS4_RENAME=0 skips.
 #   Video  H.264 Baseline/Main/High, yuv420p, level <= 4.2
 #   Audio  stereo AAC or AC-3 (every track, or just the first with --audio=one)
 #   Subs   only ENGLISH (or untagged) tracks matter: they must be SRT inside an MKV. Other languages are
@@ -43,11 +45,13 @@ Usage: makePS4 [options] FILE
   --audio=all|one          keep every audio track (default) or a single one; --keep-audio = all
   --audio-lang=CODE|any    language to put first and flag as default (default: eng)
   --force                  convert even if the file already passes
+  --no-rename              don't add the -PS4 label to files that already pass (or set PS4_RENAME=0)
   --quiet                  suppress informational output
   -h, --help               show this help
 
 Defaults can be set with PS4_SUBS, PS4_SUB_LANG, PS4_AUDIO and PS4_AUDIO_LANG.
 A failing file becomes FILE-PS4.mkv beside the original, which is never changed.
+A file that already passes is left as is, except for being renamed FILE-PS4.ext (the "known to play" label).
 See also: batchPS4 DIR, check_ps4_compatibility FILE, check_ps4_batch DIR
 EOF
     ;;
@@ -58,16 +62,50 @@ Usage: batchPS4 DIR [options]
 
   --MAX=N                  concurrent conversions (default: CPU cores, capped at 1.5x cores)
   --show-errors            show the tail of ffmpeg's output for any job that fails
+  --list=FILE              write the paths of failed files to FILE, one per line (a to-do list)
+  --trust-labels           skip files already named *-PS4.* without checking them (faster re-runs)
   -h, --help               show this help
 
 These are passed through to makePS4:
-  --subs=  --sub-lang=  --audio=  --keep-audio  --audio-lang=  --force
+  --subs=  --sub-lang=  --audio=  --keep-audio  --audio-lang=  --force  --no-rename
 
-Looks at .mp4 .mkv .mov .avi .wmv and skips existing *-PS4.mp4 / *-PS4.mkv outputs.
+Looks at .mp4 .mkv .mov .avi .wmv. Every file is checked, labelled or not. Files that pass are renamed
+*-PS4.* (the console-visible label). A file already labelled -PS4 that FAILS is reported as MISLABELLED,
+added to --list, and left untouched: delete it and reconvert from the original.
 See also: makePS4 --help, check_ps4_batch DIR (report only)
 EOF
     ;;
     esac
+}
+
+# --list=FILE support: start with an empty file (fail early if it can't be written), then write the
+# absolute paths of the failed files, one per line, so a long run leaves a to-do list behind.
+_ps4_list_init() {
+    [[ -z $1 ]] || { : > "$1"; } 2>/dev/null || { echo "${RED}Can't write to list file: $1${RESET}" >&2; return 1; }
+}
+_ps4_list_write() {
+    local out=$1 f; shift
+    [[ -n $out ]] || return 0
+    for f in "$@"; do realpath -- "$f"; done > "$out"
+    echo "${WHITE}Wrote $# path(s) to $out${RESET}"
+}
+
+# Give a file that passed the check the -PS4 label. Never overwrites; skips files already labelled.
+_ps4_label() {
+    [[ ${PS4_RENAME:-1} == 0 ]] && return 0
+    local f=$1 dir base ext new
+    dir=$(dirname "$f"); base=$(basename "$f")
+    [[ $base == *.* ]] || return 0
+    ext=${base##*.}; base=${base%.*}
+    [[ ${base,,} == *-ps4 ]] && return 0
+    new="$dir/${base}-PS4.${ext}"
+    if [[ -e $new ]]; then
+        echo "${YELLOW}WARN: not renaming '$f': '$new' already exists.${RESET}"
+    elif command mv -n -- "$f" "$new"; then     # `command` bypasses any mv() wrapper; same-dir rename is instant
+        echo "${GREEN}RENAMED: $new${RESET}"
+    else
+        echo "${YELLOW}WARN: could not rename '$f'.${RESET}"
+    fi
 }
 
 _ps4_need_tools() {
@@ -85,7 +123,7 @@ _ps4_need_tools() {
 # find <dir> [skip_outputs]  ->  NUL-separated list of video files
 _ps4_find() {
     local -a skip=()
-    [[ -n $2 ]] && skip=(! -iname '*-PS4.mp4' ! -iname '*-PS4.mkv')
+    if [[ -n $2 ]]; then local e; for e in mp4 mkv mov avi wmv; do skip+=(! -iname "*-PS4.$e"); done; fi
     find "$1" -type f \( -iname '*.mp4' -o -iname '*.mkv' -o -iname '*.mov' \
                          -o -iname '*.avi' -o -iname '*.wmv' \) "${skip[@]}" -print0 | sort -z
 }
@@ -267,7 +305,7 @@ check_ps4_compatibility() {
 }
 
 makePS4() {
-    local PS4_QUIET=${PS4_QUIET:-}
+    local PS4_QUIET=${PS4_QUIET:-} PS4_RENAME=${PS4_RENAME:-1}
     local subs=${PS4_SUBS:-soft} lang=${PS4_SUB_LANG:-all} alang=${PS4_AUDIO_LANG:-eng} audio=${PS4_AUDIO:-all} force=0 target="" arg
 
     for arg in "$@"; do
@@ -279,6 +317,7 @@ makePS4() {
             --keep-audio) audio=all ;;
             --force)      force=1 ;;
             --quiet)      PS4_QUIET=1 ;;
+            --no-rename)  PS4_RENAME=0 ;;
             -h|--help)    _ps4_help makePS4; return 0 ;;
             -*)           echo "${RED}Unknown option: $arg${RESET}" >&2; return 1 ;;
             *)            target=$arg ;;
@@ -311,9 +350,33 @@ makePS4() {
     local verdict
     if verdict=$(_ps4_verdict "$target") && (( ! force )); then
         _ps4_say "${WHITE}Already PS4 compatible; skipping: $target${RESET}"
+        _ps4_label "$target"
         return 0
     fi
     _ps4_say "${WHITE}$verdict${RESET}"
+
+    # A file wearing the -PS4 label that fails the check: report it and touch nothing (exit 3).
+    local tb; tb=$(basename "$target"); tb=${tb%.*}
+    if (( ! force )) && [[ ${tb,,} == *-ps4 ]]; then
+        echo "${YELLOW}WARN: '$target' carries the -PS4 label but FAILS the check; left untouched. Reconvert from the original.${RESET}"
+        echo "${YELLOW}WARN:   ${verdict//$'\n'/$'\n'WARN:   }${RESET}"
+        return 3
+    fi
+
+    # ---- output name ----------------------------------------------------
+    local base outfile real ext=mkv fmt=matroska
+    base=$(basename "${target%.*}")
+    [[ ${base,,} == *-ps4 ]] && base=${base%????}      # only reached with --force: avoid -PS4-PS4
+    base=${base//[!A-Za-z0-9._() -]/_}; base=${base//  / }; base=${base//__/_}
+    outfile=$(realpath -m "$(dirname "$target")/${base}-PS4.${ext}")
+    real=$(realpath "$target")
+    [[ $outfile == "$real" ]] && outfile=${outfile%.$ext}-2.$ext     # never overwrite the source
+    local tmpout="$outfile.part"
+
+    if [[ -e $outfile ]] && (( ! force )); then
+        _ps4_say "${WHITE}Already converted; skipping (output exists): $outfile${RESET}"
+        return 0
+    fi
 
     # ---- subtitle plan -------------------------------------------------
     local n=${#_sub_idx[@]} i
@@ -388,14 +451,6 @@ makePS4() {
         fi
     fi
 
-    # ---- output name ----------------------------------------------------
-    local base outfile real ext=mkv fmt=matroska
-    base=$(basename "${target%.*}")
-    base=${base//[!A-Za-z0-9._() -]/_}; base=${base//  / }; base=${base//__/_}
-    outfile=$(realpath -m "$(dirname "$target")/${base}-PS4.${ext}")
-    real=$(realpath "$target")
-    [[ $outfile == "$real" ]] && outfile=${outfile%.$ext}-2.$ext     # never overwrite the source
-    local tmpout="$outfile.part"
 
     # ---- ffmpeg arguments -----------------------------------------------
     local size reenc=0 scale="scale='min(1920,iw)':-2" tmp="" in=$target
@@ -492,7 +547,11 @@ _ps4_reap() {
     (( running-- )); (( finished++ ))
     if (( rc == 0 )); then
         echo "${GREEN}[$finished/$total] Done: $f${RESET}"
-        grep -h 'WARN:' "$log" | sed 's/^/    /'
+        grep -hE 'WARN:|RENAMED:' "$log" | sed 's/^/    /'
+    elif (( rc == 3 )); then
+        echo "${YELLOW}[$finished/$total] MISLABELLED (-PS4 but fails the check; untouched): $f${RESET}"
+        grep -h 'WARN:' "$log" | sed -n '2,$p' | sed 's/^/    /'
+        failed+=("$f")
     else
         echo "${RED}[$finished/$total] FAILED (exit $rc): $f${RESET}"
         failed+=("$f")
@@ -507,15 +566,17 @@ _ps4_reap() {
 }
 
 batchPS4() {
-    local dir="" requested="" show_err=0 arg
+    local dir="" requested="" show_err=0 list_file="" trust=0 arg
     local -a pass=()
 
     for arg in "$@"; do
         case $arg in
             --MAX=*)         requested=${arg#--MAX=} ;;
             --show-errors)   show_err=1 ;;
+            --list=*)        list_file=${arg#--list=} ;;
+            --trust-labels)  trust=1 ;;
             -h|--help)       _ps4_help batchPS4; return 0 ;;
-            --subs=*|--sub-lang=*|--audio-lang=*|--audio=*|--keep-audio|--force) pass+=("$arg") ;;
+            --subs=*|--sub-lang=*|--audio-lang=*|--audio=*|--keep-audio|--no-rename|--force) pass+=("$arg") ;;
             -*)              echo "${RED}Unknown option: $arg${RESET}" >&2; return 1 ;;
             *)               [[ -d $arg ]] && dir=$arg ;;
         esac
@@ -526,6 +587,7 @@ batchPS4() {
     fi
     [[ -z $requested || $requested =~ ^[1-9][0-9]*$ ]] || { echo "${RED}--MAX needs a positive number.${RESET}" >&2; return 1; }
     _ps4_need_tools || return 1
+    _ps4_list_init "$list_file" || return 1
 
     local cpu_count cap max_jobs
     cpu_count=$(nproc --all 2>/dev/null || getconf _NPROCESSORS_ONLN || echo 4)
@@ -537,7 +599,7 @@ batchPS4() {
     fi
 
     local -a files=() failed=()
-    mapfile -d '' -t files < <(_ps4_find "$dir" skip)
+    mapfile -d '' -t files < <(_ps4_find "$dir" $( (( trust )) && echo skip ))
     local total=${#files[@]} finished=0 running=0 aborted=0 f log pid p
     declare -A job_file job_log
     (( total )) || { echo "No video files found in '$dir'."; return 0; }
@@ -567,8 +629,9 @@ batchPS4() {
 
     (( aborted )) && { echo "${YELLOW}Batch interrupted.${RESET}"; return 130; }
     echo "${WHITE}$total files processed.${RESET}"
+    _ps4_list_write "$list_file" "${failed[@]}"
     if (( ${#failed[@]} )); then
-        echo "${RED}${#failed[@]} job(s) failed:${RESET}"
+        echo "${RED}${#failed[@]} file(s) failed or are mislabelled:${RESET}"
         printf '  - %s\n' "${failed[@]}"
         (( show_err )) || echo "(re-run with --show-errors to see ffmpeg's complaints)"
         return 1
@@ -577,11 +640,20 @@ batchPS4() {
 }
 
 check_ps4_batch() {
-    [[ -n $1 ]] || { echo "Usage: check_ps4_batch DIR"; return 1; }
-    local dir=$1 f out ans
+    local dir="" list_file="" f out ans arg
+    for arg in "$@"; do
+        case $arg in
+            --list=*)  list_file=${arg#--list=} ;;
+            -h|--help) echo "Usage: check_ps4_batch DIR [--list=FILE]   (report only; --list writes failing paths to FILE)"; return 0 ;;
+            -*)        echo "${RED}Unknown option: $arg${RESET}" >&2; return 1 ;;
+            *)         dir=$arg ;;
+        esac
+    done
+    [[ -n $dir ]] || { echo "Usage: check_ps4_batch DIR [--list=FILE]"; return 1; }
     local -a failed=()
     [[ -d $dir ]] || { echo "${RED}Error: not a directory: '$dir'${RESET}" >&2; return 1; }
     _ps4_need_tools || return 1
+    _ps4_list_init "$list_file" || return 1
 
     echo "${WHITE}Checking compatibility in '$dir'...${RESET}"
     while IFS= read -r -d '' f; do
@@ -596,8 +668,15 @@ check_ps4_batch() {
 
     echo
     echo "${WHITE}${#failed[@]} file(s) failed the compatibility check.${RESET}"
+    _ps4_list_write "$list_file" "${failed[@]}"
     (( ${#failed[@]} )) || return 0
 
+    local labelled=0
+    for f in "${failed[@]}"; do [[ $(basename "$f") == *-[Pp][Ss]4.* ]] && (( labelled++ )); done
+    (( labelled )) && echo "${YELLOW}Note: $labelled failing file(s) already carry the -PS4 label. batchPS4 will report them" \
+        "as MISLABELLED and leave them alone; delete them and reconvert from the originals.${RESET}"
+
+    [[ -t 0 ]] || return 1        # no prompt when not run from a terminal
     read -rp "Run batchPS4 on '$dir' now? [y/N] " ans
     [[ $ans == [Yy]* ]] && batchPS4 "$dir"
 }
