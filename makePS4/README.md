@@ -10,6 +10,7 @@ The design favours **boring but correct**: a file that already plays is never to
 
 * **Pass-first:** every file is probed before anything happens. If it already passes, the file is left alone (apart from the `-PS4` label below), whatever the container (MP4 or MKV) and whatever flags are set
 * **Passing files get a `-PS4` label** (`Movie.mkv` becomes `Movie-PS4.mkv`) so you can see at a glance, in the console's file browser, which files are known to play. They are renamed, never converted
+* **External subtitle files follow their video** (`Movie.srt`, `Movie.en.srt`, … become `Movie-PS4.srt`, `Movie-PS4.en.srt`), because the PS4 only loads a `.srt` whose name matches the video
 * Re-encodes only what fails: compatible video and audio streams are copied, so many fixes are a quick remux
 * Keeps **all audio tracks** and **all text subtitle tracks** by default, with language tags intact
 * Finds the English audio track even when it is untagged or mislabelled, and makes it the default track
@@ -18,6 +19,7 @@ The design favours **boring but correct**: a file that already plays is never to
 * Batch mode with controlled concurrency, a summary, and clean Ctrl-C handling
 * `--list=FILE` leaves a plain-text to-do list of failed files behind, so a multi-hour run doesn't depend on your terminal's scrollback
 * A report-only compatibility checker for whole folders
+* An optional, deliberately hard-to-automate `cleanupPS4` that verifies a conversion and, after you type a confirmation, deletes the original to reclaim disk space
 
 ---
 
@@ -37,6 +39,13 @@ source /path/to/makePS4.sh
 ```
 
 Or paste the file's contents into `~/.bashrc` directly.
+
+The optional, destructive `cleanupPS4` lives in its own file so it only exists in shells where you chose to load it. It needs `makePS4.sh` loaded first:
+
+```bash
+source /path/to/makePS4.sh
+source /path/to/cleanupPS4.sh     # optional
+```
 
 ---
 
@@ -66,6 +75,7 @@ The `-PS4` suffix means **"checked, and known to play on the PS4"**. It's meant 
 * Nothing is ever overwritten: if `Movie-PS4.mkv` already exists, the passing `Movie.mkv` keeps its name and a `WARN:` line says why.
 * Don't want your files renamed? Use `--no-rename`, or set `PS4_RENAME=0` in your environment. Conversions still produce `-PS4` outputs.
 * `--force` converts a passing file instead of labelling it.
+* External subtitle files are renamed along with the video; see [External subtitle files](#external-subtitle-files-sidecars).
 
 The label is **verified, not trusted**. `batchPS4` and `makePS4` still check the codecs of files that already carry it, because a mislabelled file would fail on the console. If a `-PS4` file fails the check (for example, output from an older version of this script), it is reported as **`MISLABELLED`**, added to the `--list` file if you asked for one, and **left completely untouched**: nothing is renamed, converted or deleted. Delete it yourself and reconvert from the original, so you never re-encode an already-lossy copy. (`makePS4` exits with status 3 in this case.) `--force` converts it anyway; the output drops the old label first, so you don't end up with `-PS4-PS4`.
 
@@ -73,7 +83,7 @@ The label is **verified, not trusted**. `batchPS4` and `makePS4` still check the
 
 ## What a conversion produces
 
-A failing file is written next to the original as **`Name-PS4.mkv`**. The original is never modified or deleted, and if `Name-PS4.mkv` already exists, the source is skipped (use `--force` to redo it). Output is written to a `.part` file and renamed on success, so an interrupted run never leaves a half-written `-PS4.mkv`.
+A failing file is written next to the original as **`Name-PS4.mkv`**. The original is never modified or deleted, and if `Name-PS4.mkv` already exists the source is skipped (use `--force` to redo it). Output is written to a `.part` file and renamed on success, so an interrupted run never leaves a half-written `-PS4.mkv`.
 
 | Component | Output |
 | --------- | ------ |
@@ -83,6 +93,24 @@ A failing file is written next to the original as **`Name-PS4.mkv`**. The origin
 | Subtitles | **All text tracks kept** (SRT, ASS/SSA, `mov_text`, WebVTT, …) and converted to SRT, with language tags intact |
 
 Sources of 4 GB or more also get `-maxrate 8000k -bufsize 16000k`.
+
+### External subtitle files (sidecars)
+
+The PS4 Media Player only loads an external subtitle file whose name matches the video's (`Movie.mkv` + `Movie.srt`). Since this tool renames and converts videos, it keeps sidecars matched:
+
+| Situation | What happens to `Movie.srt`, `Movie.en.srt`, … |
+| --------- | ---------------------------------------------- |
+| A passing file is labelled (`Movie.mkv` → `Movie-PS4.mkv`) | **Renamed** to `Movie-PS4.srt`, `Movie-PS4.en.srt`, … |
+| A file is converted | **Copied** beside the new file (`Movie-PS4.srt`, …); the original keeps its own until you delete it |
+| A converted copy already exists (a re-run) | Any missing sidecar copies are filled in |
+| A `-PS4` file passes but its sidecars still have the old name (labelled by an older version) | **Renamed** to match, or **copied** if the unlabelled video still exists |
+| `--subs=none` | Not copied. `--no-rename` also turns off the renaming |
+
+* Recognised sidecar extensions: `srt`, `ass`, `ssa`, `vtt`, `sub`, `idx`, `smi`, `sup`. (The PS4 is only known to use `.srt`; renaming the others just keeps them attached to the video in players that auto-detect them.)
+* The part between the name and the extension may be one or two language-style words (`.en`, `.eng.forced`, `.pt-BR`). Anything that could belong to a different video is left alone: `Movie.2024.srt` is ignored, and so is `Movie.Remux.srt` if `Movie.Remux.mp4` exists.
+* Sidecars are never overwritten. If the destination exists with different content you get a `WARN:` line; an identical file already in place is fine.
+* Each action prints a `SIDECAR:` line, and `batchPS4` re-prints them under the finished file.
+* Note the sanitised output name: a source called `Show [x].mkv` converts to `Show _x_-PS4.mkv`, and its sidecars are copied to match.
 
 ### Subtitle notes
 
@@ -156,7 +184,7 @@ batchPS4 "MediaFolder" --MAX=2 --show-errors
 | `--trust-labels` | Skip files already named `*-PS4.*` without checking them. Faster re-runs, but a mislabelled file will go unnoticed |
 | `--list=FILE` | Write the absolute paths of failed files to `FILE`, one per line. The file is emptied at the start of the run (and the run refuses to start if it can't be written), so an empty file afterwards means nothing failed |
 
-Files that already pass count as "done" after a quick probe, so re-running a batch on a finished folder is safe. On a very large library, you can add `--trust-labels` to skip anything already named `*-PS4.*` without probing it.
+Files that already pass count as "done" after a quick probe, so re-running a batch on a finished folder is safe. On a very large library you can add `--trust-labels` to skip anything already named `*-PS4.*` without probing it.
 
 ---
 
@@ -181,6 +209,63 @@ while IFS= read -r f; do
     makePS4 "$f"          # or add flags such as --subs=burn for the stubborn ones
 done < failed.txt
 ```
+
+---
+
+## `cleanupPS4`: reclaim space by deleting verified originals (destructive)
+
+If disk space is tight, `cleanupPS4` verifies that a conversion is flawless and then deletes the **original**, keeping the `-PS4` copy. It is separate from the converter on purpose, and it is built so that it can't be run unattended, or on entire folders: single files only.
+
+```bash
+cleanupPS4 "Show S01E01.mkv"                 # verify, then ask before deleting
+cleanupPS4 --verify-only "Show S01E01.mkv"   # run the checks and report; never offers to delete
+cleanupPS4 --quick "Show S01E01.mkv"         # skip the full decode test (faster, less certain)
+```
+
+Pass the **original**; it finds `Show S01E01-PS4.mkv` beside it. Everything below must pass, or nothing is deleted:
+
+| Check | Requirement |
+| ----- | ----------- |
+| Compatibility | The converted copy passes the same check `makePS4` uses |
+| Duration | Within 0.2% of the original (minimum 1 second) |
+| Audio | Every audio track present, with the same languages |
+| Subtitles | Every text subtitle track present, with the same languages. If the original has image-based subtitles (PGS/VobSub), the check fails, because burn-in can't be verified automatically; look at the file yourself |
+| Picture | Width matches the original (or was scaled down to 1920) |
+| Integrity | The entire converted file decodes without a single error (skipped with `--quick`) |
+
+If everything passes, it shows exactly which file will be deleted and which is kept, with sizes, then asks you to **type the word `delete`**. Anything else cancels.
+
+**Sidecar subtitles.** If the original has external subtitle files (`Movie.srt`, `Movie.en.srt`, …) and `makePS4` copied them beside the converted file, they are now redundant. They are listed in the confirmation and deleted with the original, but only if each one is **byte-for-byte identical** to its copy. A sidecar with no identical copy is left alone and reported; run `makePS4` on the original again to copy it first.
+
+### Finding candidates: list mode
+
+```bash
+cleanupPS4 --list "TV Shows/Some Show"              # writes ./ps4-cleanup-candidates.txt
+cleanupPS4 --list=todo.txt "TV Shows/Some Show"     # or choose the file
+```
+
+Scans the folder recursively and writes the **originals that already have a ready converted copy**: the `-PS4.mkv` exists, passes the compatibility rules, and has the same duration. Originals whose copy is missing, unreadable, failing or the wrong length are reported on screen but not listed. It is read-only and only a pre-filter; every file still gets the full verification and its own confirmation when you run `cleanupPS4` on it.
+
+To work through the list, a loop typed at your prompt keeps the terminal attached, so each file still asks you to type `delete`:
+
+```bash
+mapfile -t todo < ps4-cleanup-candidates.txt
+for f in "${todo[@]}"; do cleanupPS4 "$f"; done
+```
+
+(Reading the list with `while read … < file` instead would make stdin a file, and `cleanupPS4` would refuse to run.)
+
+**Argument rule (a safeguard):** `--list` only counts when it is the **first** argument, and then everything except the folder is ignored (you get a note naming what was ignored). If `--list` appears anywhere else it is ignored, with a note, and the rest of the command runs normally. So a deleting command can never turn into a list run, or the other way round.
+
+**Safeguards (there is no override for any of them):**
+
+* **One file at a time.** Directories and multiple arguments are refused; there is no batch mode
+* **Interactive terminals only.** It refuses when stdin or stdout isn't a terminal, in non-interactive shells, and when called from a script or another function (so it can't be wired into a loop in a script or into `batchPS4`)
+* **The confirmation is read from `/dev/tty`**, so piping input into it (`yes delete | cleanupPS4 …`) doesn't work, and there is no `--yes` flag
+* It refuses to touch a file carrying the `-PS4` label (that's the converted copy), refuses if the original and converted copy are the same file, and refuses if a leftover `.part` file exists
+* It deletes only the one original, plus external subtitle copies that are provably redundant (next section). Anything else beside it (`.nfo`, artwork, non-identical subtitles, …) is left alone
+
+If you converted with options that deliberately drop tracks (`--audio=one`, `--subs=none`, `--sub-lang=`), the track checks will fail, since the converted copy no longer matches the original. That is intentional: it can't tell a deliberate trim from a failed conversion. Delete those originals yourself if you're sure.
 
 ---
 

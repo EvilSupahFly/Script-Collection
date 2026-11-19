@@ -52,6 +52,8 @@ Usage: makePS4 [options] FILE
 Defaults can be set with PS4_SUBS, PS4_SUB_LANG, PS4_AUDIO and PS4_AUDIO_LANG.
 A failing file becomes FILE-PS4.mkv beside the original, which is never changed.
 A file that already passes is left as is, except for being renamed FILE-PS4.ext (the "known to play" label).
+External subtitles (FILE.srt, FILE.en.srt, ...) follow the video, since the PS4 only loads a .srt whose name
+matches: renamed along with a labelled file, copied beside a converted one (unless --subs=none).
 See also: batchPS4 DIR, check_ps4_compatibility FILE, check_ps4_batch DIR
 EOF
     ;;
@@ -90,6 +92,51 @@ _ps4_list_write() {
     echo "${WHITE}Wrote $# path(s) to $out${RESET}"
 }
 
+# ---- external subtitle files ("sidecars") --------------------------------------------------------
+# The PS4 only loads an external .srt whose name matches the video's, so sidecars must follow the video:
+# Movie.srt / Movie.en.srt  ->  Movie-PS4.srt / Movie-PS4.en.srt
+_ps4_sub_exts=" srt ass ssa vtt sub idx smi sup "
+
+# Print the sidecar files belonging to the video whose path WITHOUT extension is $1. A sidecar is
+# STEM.ext or STEM.<one or two language-ish words>.ext; it is ignored if it could belong to another
+# video (STEM.<word>.mp4 etc. exists).
+_ps4_sidecars() {
+    local stem dir base f name ext suffix mid e
+    stem=$(realpath -m -- "$1"); dir=$(dirname "$stem"); base=$(basename "$stem")
+    for f in "$dir"/*; do
+        [[ -f $f ]] || continue
+        name=${f##*/}
+        [[ $name == "$base".* ]] || continue
+        ext=${name##*.}; ext=${ext,,}
+        [[ $_ps4_sub_exts == *" $ext "* ]] || continue
+        suffix=${name#"$base"}; mid=${suffix%.*}
+        if [[ -n $mid ]]; then
+            [[ $mid =~ ^(\.[A-Za-z][A-Za-z_-]{1,11}){1,2}$ ]] || continue
+            for e in mp4 mkv mov avi wmv; do [[ -e $dir/$base$mid.$e ]] && continue 2; done
+        fi
+        printf '%s\n' "$f"
+    done
+}
+
+# _ps4_sidecar_place OLD_STEM NEW_STEM move|copy: give OLD_STEM's sidecars the NEW_STEM name.
+# Never overwrites; an identical file already in place is fine and silent.
+_ps4_sidecar_place() {
+    local old new how=$3 f suffix dest
+    old=$(realpath -m -- "$1"); new=$(realpath -m -- "$2")
+    while IFS= read -r f; do
+        suffix=${f#"$old"}; dest="$new$suffix"
+        if [[ -e $dest ]]; then
+            cmp -s -- "$f" "$dest" || echo "${YELLOW}WARN: sidecar '$f' not placed: '$dest' already exists and differs.${RESET}"
+            continue
+        fi
+        if [[ $how == move ]]; then
+            command mv -n -- "$f" "$dest" && echo "${GREEN}SIDECAR: renamed '${f##*/}' -> '${dest##*/}'${RESET}"
+        else
+            command cp -- "$f" "$dest" && echo "${GREEN}SIDECAR: copied '${f##*/}' -> '${dest##*/}'${RESET}"
+        fi
+    done < <(_ps4_sidecars "$old")
+}
+
 # Give a file that passed the check the -PS4 label. Never overwrites; skips files already labelled.
 _ps4_label() {
     [[ ${PS4_RENAME:-1} == 0 ]] && return 0
@@ -97,15 +144,34 @@ _ps4_label() {
     dir=$(dirname "$f"); base=$(basename "$f")
     [[ $base == *.* ]] || return 0
     ext=${base##*.}; base=${base%.*}
-    [[ ${base,,} == *-ps4 ]] && return 0
+    if [[ ${base,,} == *-ps4 ]]; then
+        # Already labelled: pick up sidecars still carrying the pre-label name (moved if no unlabelled
+        # video exists, otherwise copied, since that video still needs its own).
+        local old="$dir/$base" how=move e
+        old=${old%????}
+        for e in mp4 mkv mov avi wmv; do [[ -e $old.$e ]] && how=copy; done
+        _ps4_sidecar_place "$old" "$dir/$base" "$how"
+        return 0
+    fi
     new="$dir/${base}-PS4.${ext}"
     if [[ -e $new ]]; then
         echo "${YELLOW}WARN: not renaming '$f': '$new' already exists.${RESET}"
     elif command mv -n -- "$f" "$new"; then     # `command` bypasses any mv() wrapper; same-dir rename is instant
         echo "${GREEN}RENAMED: $new${RESET}"
+        _ps4_sidecar_place "$dir/$base" "${new%.*}" move
     else
         echo "${YELLOW}WARN: could not rename '$f'.${RESET}"
     fi
+}
+
+# Where makePS4 writes the converted copy of FILE (absolute path, before any collision handling).
+# cleanupPS4 uses this too, so both always agree on the name.
+_ps4_outname() {
+    local base
+    base=$(basename "${1%.*}")
+    [[ ${base,,} == *-ps4 ]] && base=${base%????}      # only matters with --force: avoid -PS4-PS4
+    base=${base//[!A-Za-z0-9._() -]/_}; base=${base//  / }; base=${base//__/_}
+    realpath -m "$(dirname "$1")/${base}-PS4.mkv"
 }
 
 _ps4_need_tools() {
@@ -364,17 +430,15 @@ makePS4() {
     fi
 
     # ---- output name ----------------------------------------------------
-    local base outfile real ext=mkv fmt=matroska
-    base=$(basename "${target%.*}")
-    [[ ${base,,} == *-ps4 ]] && base=${base%????}      # only reached with --force: avoid -PS4-PS4
-    base=${base//[!A-Za-z0-9._() -]/_}; base=${base//  / }; base=${base//__/_}
-    outfile=$(realpath -m "$(dirname "$target")/${base}-PS4.${ext}")
+    local outfile real ext=mkv fmt=matroska
+    outfile=$(_ps4_outname "$target")
     real=$(realpath "$target")
     [[ $outfile == "$real" ]] && outfile=${outfile%.$ext}-2.$ext     # never overwrite the source
     local tmpout="$outfile.part"
 
     if [[ -e $outfile ]] && (( ! force )); then
         _ps4_say "${WHITE}Already converted; skipping (output exists): $outfile${RESET}"
+        [[ $subs == none ]] || _ps4_sidecar_place "${target%.*}" "${outfile%.*}" copy
         return 0
     fi
 
@@ -532,6 +596,9 @@ makePS4() {
     # instant, whereas an rsync-based mv would re-copy the whole file.
     command mv -f -- "$tmpout" "$outfile" || return 1
     _ps4_say "${GREEN}Created: $outfile${RESET}"
+    # external subtitles must carry the new name too (copied: the original keeps its own until you delete it)
+    [[ $subs == none ]] || _ps4_sidecar_place "${target%.*}" "${outfile%.*}" copy
+    return 0
 }
 
 # Batch reaper. Deliberately relies on batchPS4's local variables (bash dynamic scope).
@@ -547,7 +614,7 @@ _ps4_reap() {
     (( running-- )); (( finished++ ))
     if (( rc == 0 )); then
         echo "${GREEN}[$finished/$total] Done: $f${RESET}"
-        grep -hE 'WARN:|RENAMED:' "$log" | sed 's/^/    /'
+        grep -hE 'WARN:|RENAMED:|SIDECAR:' "$log" | sed 's/^/    /'
     elif (( rc == 3 )); then
         echo "${YELLOW}[$finished/$total] MISLABELLED (-PS4 but fails the check; untouched): $f${RESET}"
         grep -h 'WARN:' "$log" | sed -n '2,$p' | sed 's/^/    /'
